@@ -1,0 +1,75 @@
+---
+name: antifragile-software-review
+description: Review software repositories through Nassim Taleb's antifragility lens. Use when asked to make a codebase antifragile, apply Antifragile or Taleb concepts to software design, find fragility risks, improve resilience beyond robustness, or inspect architecture, reliability, observability, deployment, testing, rollback, incident-learning, coupling, optionality, or failure-handling tradeoffs.
+---
+
+# Antifragile Software Review
+
+## Overview
+
+Inspect the codebase for design choices that are harmed by volatility, uncertainty, stress, errors, growth, incidents, or changing requirements. Produce concrete findings and changes that help the system gain information, options, or safety from small failures instead of merely surviving them.
+
+Load `references/antifragility-primer.md` when you need the conceptual mapping from Taleb's ideas to software design.
+
+## Workflow
+
+1. Establish the system shape before judging it.
+   - Read `README`, architecture docs, package manifests, CI config, deploy/infrastructure files, test layout, migrations, observability config, and runbooks if present.
+   - Identify critical user flows, data mutation paths, external dependencies, release paths, and operational ownership.
+
+2. Run the heuristic scanner for leads:
+
+```bash
+python3 /path/to/antifragile-software-review/scripts/antifragile_scan.py /path/to/repo
+```
+
+Use scanner output as a lead list only. Confirm important claims by reading the relevant code, tests, docs, and deployment configuration.
+
+3. Search manually for antifragility failure modes:
+   - Silent failure: swallowed exceptions, empty catches, ignored errors, best-effort paths with no metric or alert.
+   - Downside concentration: single process, region, queue, database, credential, deploy path, owner, or global state whose failure cascades.
+   - Prediction dependence: fixed sleeps, magic thresholds, calendar assumptions, forecast-driven capacity, brittle ordering assumptions.
+   - Irreversibility: migrations, scripts, deletes, billing actions, external side effects, or deploys with no dry-run, rollback, idempotency, or audit trail.
+   - Tight coupling: synchronous chains, cross-layer imports, god modules, shared mutable state, hidden temporal coupling, deployment coupling.
+   - Missing feedback loops: weak observability, no SLOs/error budgets, no incident review artifacts, no regression tests from prior incidents.
+   - Fragile optimization: saturated queues, no slack, maximized utilization, no backpressure, no rate limits, no load shedding.
+   - Unsafe experimentation: no feature flags, canaries, circuit breakers, kill switches, staged rollout, contract tests, or blast-radius limits.
+
+4. Map evidence to antifragile levers.
+   - Via negativa: remove the fragile thing before adding machinery.
+   - Barbell: make the core boring, protected, and recoverable; isolate high-upside experiments behind reversible boundaries.
+   - Optionality: add cheap options to change course, such as interfaces, feature flags, rollbacks, dry-runs, idempotency, adapters, and replaceable dependencies.
+   - Convexity: prefer bounded downside with unbounded learning or upside.
+   - Hormesis: add safe stressors such as fault injection, mutation testing, load tests, game days, dependency failure tests, and incident-derived regression tests.
+   - Redundancy and slack: preserve spare capacity, backup paths, retries with budgets, bulkheads, queues, and graceful degradation.
+   - Decentralization: contain failures locally and let teams/components learn independently where possible.
+   - Skin in the game: make ownership, alerts, dashboards, and post-incident follow-through visible to the people changing the system.
+
+5. Rank recommendations by fragility exposure.
+   - Prioritize ruin risks and irreversible actions first.
+   - Prefer small, reversible changes that create learning loops.
+   - Separate robust/resilient fixes from truly antifragile fixes. A retry may be robust; a retry budget with metrics, alerting, and an incident-derived regression test is closer to antifragile.
+
+## Output Format
+
+Start with findings, not a generic essay. Use this shape:
+
+```markdown
+## Findings
+
+- [P1] Short title
+  Evidence: `path/file.ext:123`
+  Fragility: why volatility, errors, growth, or uncertainty hurts this design.
+  Antifragile move: concrete change that bounds downside and creates learning/options.
+  Validation: test, experiment, metric, or code-reading step that would prove the change.
+
+## Antifragility Backlog
+
+- Via negativa:
+- Reversibility and optionality:
+- Stress-learning experiments:
+- Observability and ownership:
+- Structural bets:
+```
+
+Do not present generic practices as findings without codebase evidence. If evidence is missing, say what is unknown and how to verify it.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Antifragile Software Review"
+  short_description: "Find antifragility gaps in codebases"
+  default_prompt: "Use $antifragile-software-review to inspect this codebase for fragile design choices and propose antifragile improvements."
