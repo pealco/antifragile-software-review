@@ -64,6 +64,9 @@ except Exception: pass
         self.assertEqual(["app.py"], [finding["path"] for finding in scan["findings"]])
         self.assertEqual("silent-exception", scan["findings"][0]["pattern_id"])
         self.assertEqual("code", scan["findings"][0]["source_kind"])
+        self.assertEqual("python", scan["findings"][0]["language"])
+        self.assertEqual(["ruff:BLE001", "ruff:S110"], scan["findings"][0]["linter_overlaps"])
+        self.assertIn("lost learning", scan["findings"][0]["scanner_value"])
 
     def test_inline_suppression_can_ignore_one_pattern_or_a_whole_line(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -155,6 +158,99 @@ while True:  # antifragile-scan: ignore
         self.assertEqual({"silent-exception": 1}, scan["finding_overflow"])
         self.assertIn("## Capped Finding Overflow", report)
         self.assertIn("`silent-exception`: 1 additional matches omitted", report)
+
+    def test_linter_overlap_metadata_is_visible_but_advisory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_file(
+                root,
+                "app.py",
+                """
+try:
+    risky()
+except:
+    recover()
+
+global cache
+print("debug")
+requests.get("https://example.com")
+""",
+            )
+
+            scan = run_scan(root)
+            report = run_scan_text(root)
+
+        overlaps_by_pattern = {finding["pattern_id"]: finding["linter_overlaps"] for finding in scan["findings"]}
+        self.assertEqual(["ruff:E722"], overlaps_by_pattern["bare-except"])
+        self.assertEqual(["ruff:PLW0603"], overlaps_by_pattern["global-state"])
+        self.assertEqual(["ruff:T201"], overlaps_by_pattern["debug-print"])
+        self.assertEqual(["ruff:S113"], overlaps_by_pattern["python-http-without-timeout"])
+        self.assertIn("Linter overlap: ruff:E722", report)
+        self.assertIn("Scanner value:", report)
+
+    def test_language_specific_rust_typescript_and_sql_leads(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_file(
+                root,
+                "src/lib.rs",
+                """
+let config = load_config().unwrap();
+unsafe { call_ffi(); }
+todo!("replace test stub");
+println!("debug");
+loop {
+    poll();
+}
+""",
+            )
+            write_file(
+                root,
+                "src/app.ts",
+                """
+const payload: any = await fetch("https://api.example.test/data");
+try { risky(); } catch (error) {}
+setTimeout(retry, 1000);
+""",
+            )
+            write_file(
+                root,
+                "db/migration.sql",
+                """
+ALTER TABLE users DROP COLUMN legacy_token;
+UPDATE users SET admin = true;
+SELECT pg_sleep(10);
+""",
+            )
+
+            scan = run_scan(root)
+            report = run_scan_text(root)
+
+        signals = scan["project_signals"]
+        self.assertEqual(1, signals["language_file_counts"]["rust"])
+        self.assertEqual(1, signals["language_file_counts"]["typescript"])
+        self.assertEqual(1, signals["language_file_counts"]["sql"])
+
+        findings_by_pattern = {finding["pattern_id"]: finding for finding in scan["findings"]}
+        self.assertEqual("rust", findings_by_pattern["rust-unwrap-expect"]["language"])
+        self.assertEqual(["clippy:unwrap_used"], findings_by_pattern["rust-unwrap-expect"]["linter_overlaps"])
+        self.assertEqual("rust", findings_by_pattern["rust-unsafe"]["language"])
+        self.assertEqual("rust", findings_by_pattern["rust-todo-unimplemented"]["language"])
+        self.assertEqual("rust", findings_by_pattern["rust-debug-output"]["language"])
+        self.assertEqual("rust", findings_by_pattern["unbounded-loop"]["language"])
+        self.assertEqual("typescript", findings_by_pattern["typescript-explicit-any"]["language"])
+        self.assertEqual(["@typescript-eslint:no-explicit-any"], findings_by_pattern["typescript-explicit-any"]["linter_overlaps"])
+        self.assertEqual("typescript", findings_by_pattern["fetch-without-abort"]["language"])
+        self.assertEqual("typescript", findings_by_pattern["empty-catch"]["language"])
+        self.assertEqual("sql", findings_by_pattern["sql-destructive-schema"]["language"])
+        self.assertEqual("sql", findings_by_pattern["sql-update-without-where"]["language"])
+        self.assertTrue(
+            any(finding["pattern_id"] == "fixed-sleep" and finding["language"] == "sql" for finding in scan["findings"])
+        )
+        self.assertIn("Languages scanned:", report)
+        self.assertIn("rust:", report)
+        self.assertIn("typescript:", report)
+        self.assertIn("sql:", report)
 
 
 if __name__ == "__main__":

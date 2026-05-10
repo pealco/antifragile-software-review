@@ -110,6 +110,52 @@ TEST_DIR_NAMES = {"__tests__", "spec", "test", "tests"}
 INLINE_IGNORE_RE = re.compile(r"antifragile-scan:\s*ignore(?:\[([^\]]+)\])?", re.IGNORECASE)
 SOURCE_KINDS = ("code", "config", "docs", "tests")
 
+LANGUAGE_BY_SUFFIX = {
+    ".c": "c",
+    ".cc": "cpp",
+    ".conf": "config",
+    ".cpp": "cpp",
+    ".cs": "csharp",
+    ".css": "css",
+    ".go": "go",
+    ".gradle": "gradle",
+    ".h": "c",
+    ".hpp": "cpp",
+    ".html": "html",
+    ".java": "java",
+    ".js": "javascript",
+    ".json": "json",
+    ".jsx": "javascript",
+    ".kt": "kotlin",
+    ".kts": "kotlin",
+    ".lua": "lua",
+    ".md": "markdown",
+    ".php": "php",
+    ".py": "python",
+    ".rb": "ruby",
+    ".rs": "rust",
+    ".scala": "scala",
+    ".sh": "shell",
+    ".sql": "sql",
+    ".swift": "swift",
+    ".tf": "terraform",
+    ".toml": "toml",
+    ".ts": "typescript",
+    ".tsx": "typescript",
+    ".xml": "xml",
+    ".yaml": "yaml",
+    ".yml": "yaml",
+}
+
+LANGUAGE_BY_FILENAME = {
+    ".dockerignore": "dockerignore",
+    ".env.example": "dotenv",
+    ".gitlab-ci.yml": "yaml",
+    "Dockerfile": "dockerfile",
+    "Makefile": "make",
+    "Rakefile": "ruby",
+}
+
 
 @dataclass(frozen=True)
 class Pattern:
@@ -119,6 +165,9 @@ class Pattern:
     regex: str
     why: str
     source_kinds: tuple[str, ...] = ("code", "config")
+    languages: tuple[str, ...] = ()
+    linter_overlaps: tuple[str, ...] = ()
+    scanner_value: str = "Antifragility review lead; confirm in context before treating it as a finding."
 
 
 @dataclass
@@ -126,10 +175,13 @@ class Finding:
     path: str
     line: int
     source_kind: str
+    language: str
     pattern_id: str
     category: str
     concept: str
     why: str
+    linter_overlaps: tuple[str, ...]
+    scanner_value: str
     snippet: str
 
 
@@ -140,6 +192,9 @@ PATTERNS = [
         "skin in the game / feedback",
         r"^\s*except\s*:\s*(?:#.*)?$",
         "Broad exception handling can erase failure evidence unless it logs, measures, or re-raises nearby.",
+        languages=("python",),
+        linter_overlaps=("ruff:E722",),
+        scanner_value="Adds antifragility framing around feedback loss; Ruff provides more precise Python linting.",
     ),
     Pattern(
         "silent-exception",
@@ -147,13 +202,18 @@ PATTERNS = [
         "skin in the game / feedback",
         r"^\s*except\b.*:\s*(pass|return\s+None|return|continue)\b",
         "Swallowed errors convert stress into ignorance instead of learning.",
+        languages=("python",),
+        scanner_value="Highlights lost learning and missing ownership even when a Python linter also flags the construct.",
     ),
     Pattern(
         "empty-catch",
         "Silent failure and lost learning",
         "skin in the game / feedback",
-        r"\bcatch\s*\([^)]*\)\s*\{\s*\}",
+        r"\bcatch\s*(?:\([^)]*\))?\s*\{\s*\}",
         "Empty catch blocks hide faults and prevent incident-derived improvement.",
+        languages=("typescript", "javascript", "java", "csharp"),
+        linter_overlaps=("eslint:no-empty",),
+        scanner_value="Catches swallowed TypeScript/JavaScript-style exceptions as lost feedback, not syntax style.",
     ),
     Pattern(
         "ignored-error",
@@ -166,8 +226,9 @@ PATTERNS = [
         "fixed-sleep",
         "Prediction and timing dependence",
         "prediction dependence",
-        r"\b(time\.)?sleep\s*\(|\bThread\.sleep\s*\(|\bsetTimeout\s*\(|\bsetInterval\s*\(|\bawait\b.*\bsleep\s*\(",
+        r"\b(time\.)?sleep\s*\(|\bThread\.sleep\s*\(|\bthread::sleep\s*\(|\btokio::time::sleep\s*\(|\bpg_sleep\s*\(|\bsetTimeout\s*\(|\bsetInterval\s*\(|\bawait\b.*\bsleep\s*\(",
         "Fixed sleeps often encode timing predictions where event-driven checks or bounded retries are safer.",
+        scanner_value="Flags timing predictions across Python, Rust, SQL, TypeScript, and JavaScript.",
     ),
     Pattern(
         "magic-timeout",
@@ -187,15 +248,17 @@ PATTERNS = [
         "process-abort",
         "Cascade and ruin risk",
         "bounded downside",
-        r"\b(sys\.exit|process\.exit|os\.Exit|log\.Fatal|panic!|panic\s*\(|abort\s*\()",
+        r"\b(sys\.exit|process\.exit|std::process::exit|Deno\.exit|os\.Exit|log\.Fatal|panic!|panic\s*\(|abort\s*\()",
         "Process-level aborts can turn local errors into system-wide outages.",
+        scanner_value="Surfaces process-level aborts across runtimes so reviewers can bound local failures.",
     ),
     Pattern(
         "unbounded-loop",
         "Cascade and ruin risk",
         "bounded downside",
-        r"^\s*(while\s+True|for\s*\(\s*;\s*;\s*\))",
+        r"^\s*(while\s+True|for\s*\(\s*;\s*;\s*\)|loop\s*\{)",
         "Unbounded loops need cancellation, backoff, budgets, or visible liveness signals.",
+        scanner_value="Looks for unbounded loop forms across Python, JavaScript, TypeScript, C-style languages, and Rust.",
     ),
     Pattern(
         "destructive-action",
@@ -217,6 +280,7 @@ PATTERNS = [
         "decentralization",
         r"^\s*(global\s+\w+|public\s+static\s+(?!final)|static\s+mut\s+|lazy_static!|OnceCell)",
         "Shared mutable state can concentrate downside and create hidden temporal coupling.",
+        scanner_value="Surfaces cross-language concentration risk; Python-only cases may overlap with Ruff.",
     ),
     Pattern(
         "singleton",
@@ -238,6 +302,71 @@ PATTERNS = [
         "feedback",
         r"\b(print\s*\(|console\.log\s*\(|puts\s+)",
         "Ad hoc prints may indicate missing structured logs, metrics, or traces.",
+        scanner_value="Connects ad hoc output to observability gaps across Python, JavaScript, and Ruby.",
+    ),
+    Pattern(
+        "rust-unwrap-expect",
+        "Cascade and ruin risk",
+        "bounded downside",
+        r"\.(unwrap|expect)\s*\(",
+        "Rust unwrap/expect can turn recoverable errors into panics unless isolated at an intentional boundary.",
+        languages=("rust",),
+        scanner_value="Adds Rust failure-boundary context; Clippy is better for precise Rust linting.",
+    ),
+    Pattern(
+        "rust-todo-unimplemented",
+        "Known fragility markers",
+        "via negativa",
+        r"\b(todo!|unimplemented!|unreachable!)\s*\(",
+        "Placeholder or unreachable macros need ownership before they become production failure paths.",
+        languages=("rust",),
+        scanner_value="Treats Rust placeholder and unreachable assumptions as review leads for ownership and blast radius.",
+    ),
+    Pattern(
+        "rust-unsafe",
+        "Centralized state and tight coupling",
+        "bounded downside",
+        r"^\s*unsafe\s*(\{|fn\b|impl\b|trait\b)",
+        "Unsafe Rust removes compiler guarantees and needs a small, well-tested, well-owned boundary.",
+        languages=("rust",),
+        scanner_value="Highlights Rust safety-boundary concentration rather than treating unsafe as automatically wrong.",
+    ),
+    Pattern(
+        "rust-debug-output",
+        "Weak observability",
+        "feedback",
+        r"\b(dbg!|print!|println!|eprintln!)\s*\(",
+        "Ad hoc Rust output can hide missing structured logging, metrics, or trace context.",
+        languages=("rust",),
+        scanner_value="Connects Rust debug output to operational feedback quality.",
+    ),
+    Pattern(
+        "typescript-explicit-any",
+        "Prediction and timing dependence",
+        "optionality / feedback",
+        r"\b(as\s+any|:\s*any\b|<any>)",
+        "Explicit any removes type feedback and can let contract drift reach runtime.",
+        languages=("typescript",),
+        linter_overlaps=("@typescript-eslint:no-explicit-any",),
+        scanner_value="Frames TypeScript type erasure as lost feedback and contract optionality.",
+    ),
+    Pattern(
+        "sql-destructive-schema",
+        "Irreversibility",
+        "optionality / reversibility",
+        r"\b(ALTER\s+TABLE\b.*\bDROP\s+(COLUMN|CONSTRAINT)|DROP\s+(DATABASE|SCHEMA|INDEX|TYPE|VIEW|MATERIALIZED\s+VIEW))\b",
+        "Destructive schema changes need rollback, backups, staged deploys, or explicit recovery plans.",
+        languages=("sql",),
+        scanner_value="Extends irreversible-change review to SQL schema operations beyond DROP TABLE.",
+    ),
+    Pattern(
+        "sql-update-without-where",
+        "Irreversibility",
+        "optionality / reversibility",
+        r"^\s*UPDATE\s+\S+\s+SET\b(?!.*\bWHERE\b)",
+        "Bulk updates without an inline WHERE clause can create large irreversible data changes.",
+        languages=("sql",),
+        scanner_value="Flags data mutation blast radius for reviewer confirmation; multiline SQL needs manual review.",
     ),
     Pattern(
         "todo-debt",
@@ -336,6 +465,12 @@ def classify_path(path: Path) -> str:
     return "code"
 
 
+def language_for_path(path: Path) -> str:
+    if path.name in LANGUAGE_BY_FILENAME:
+        return LANGUAGE_BY_FILENAME[path.name]
+    return LANGUAGE_BY_SUFFIX.get(path.suffix.lower(), "text")
+
+
 def ignore_applies(line: str, pattern_id: str) -> bool:
     match = INLINE_IGNORE_RE.search(line)
     if not match:
@@ -349,6 +484,48 @@ def ignore_applies(line: str, pattern_id: str) -> bool:
 
 def strip_inline_ignore(line: str) -> str:
     return INLINE_IGNORE_RE.sub("", line)
+
+
+def linter_overlaps_for_pattern(pattern: Pattern, line: str) -> tuple[str, ...]:
+    overlaps = list(pattern.linter_overlaps)
+
+    if pattern.id == "silent-exception":
+        if re.search(r"except\s+(BaseException|Exception)\b", line):
+            overlaps.append("ruff:BLE001")
+        if re.search(r":\s*pass\b", line):
+            overlaps.append("ruff:S110")
+        if re.search(r":\s*continue\b", line):
+            overlaps.append("ruff:S112")
+
+    if pattern.id == "global-state" and re.search(r"^\s*global\s+\w+", line):
+        overlaps.append("ruff:PLW0603")
+
+    if pattern.id == "debug-print" and re.search(r"\bprint\s*\(", line):
+        overlaps.append("ruff:T201")
+
+    if pattern.id == "rust-unwrap-expect":
+        if re.search(r"\.unwrap\s*\(", line):
+            overlaps.append("clippy:unwrap_used")
+        if re.search(r"\.expect\s*\(", line):
+            overlaps.append("clippy:expect_used")
+
+    if pattern.id == "rust-todo-unimplemented":
+        if re.search(r"\btodo!\s*\(", line):
+            overlaps.append("clippy:todo")
+        if re.search(r"\bunimplemented!\s*\(", line):
+            overlaps.append("clippy:unimplemented")
+        if re.search(r"\bunreachable!\s*\(", line):
+            overlaps.append("clippy:unreachable")
+
+    if pattern.id == "rust-debug-output":
+        if re.search(r"\bdbg!\s*\(", line):
+            overlaps.append("clippy:dbg_macro")
+        if re.search(r"\b(print!|println!)\s*\(", line):
+            overlaps.append("clippy:print_stdout")
+        if re.search(r"\beprintln!\s*\(", line):
+            overlaps.append("clippy:print_stderr")
+
+    return tuple(dict.fromkeys(overlaps))
 
 
 def skip_reason(root: Path, path: Path, exclude_globs: list[str], scanner_path: Path) -> str | None:
@@ -372,6 +549,7 @@ def find_pattern_matches(
     findings: list[Finding] = []
     compiled = [(pattern, re.compile(pattern.regex, re.IGNORECASE)) for pattern in PATTERNS]
     source_kind = classify_path(path)
+    language = language_for_path(path)
 
     for line_number, line in enumerate(text.splitlines(), start=1):
         stripped = line.strip()
@@ -381,6 +559,8 @@ def find_pattern_matches(
 
         for pattern, regex in compiled:
             if source_kind not in pattern.source_kinds:
+                continue
+            if pattern.languages and language not in pattern.languages:
                 continue
             if ignore_applies(line, pattern.id):
                 continue
@@ -396,15 +576,18 @@ def find_pattern_matches(
                         path=rel_path(path, root),
                         line=line_number,
                         source_kind=source_kind,
+                        language=language,
                         pattern_id=pattern.id,
                         category=pattern.category,
                         concept=pattern.concept,
                         why=pattern.why,
+                        linter_overlaps=linter_overlaps_for_pattern(pattern, search_line),
+                        scanner_value=pattern.scanner_value,
                         snippet=stripped[:220],
                     )
                 )
 
-        custom = custom_line_findings(root, path, source_kind, line_number, line)
+        custom = custom_line_findings(root, path, source_kind, language, line_number, line)
         for finding in custom:
             if ignore_applies(line, finding.pattern_id):
                 continue
@@ -417,37 +600,54 @@ def find_pattern_matches(
     return findings
 
 
-def custom_line_findings(root: Path, path: Path, source_kind: str, line_number: int, line: str) -> list[Finding]:
+def custom_line_findings(
+    root: Path,
+    path: Path,
+    source_kind: str,
+    language: str,
+    line_number: int,
+    line: str,
+) -> list[Finding]:
     findings: list[Finding] = []
     stripped = line.strip()
 
     if source_kind not in {"code", "config"}:
         return findings
 
-    if re.search(r"\b(requests|httpx)\.(get|post|put|patch|delete)\s*\(", line) and "timeout=" not in line:
+    if (
+        language == "python"
+        and re.search(r"\b(requests|httpx)\.(get|post|put|patch|delete)\s*\(", line)
+        and "timeout=" not in line
+    ):
         findings.append(
             Finding(
                 path=rel_path(path, root),
                 line=line_number,
                 source_kind=source_kind,
+                language=language,
                 pattern_id="python-http-without-timeout",
                 category="Cascade and ruin risk",
                 concept="bounded downside",
                 why="Outbound calls without explicit timeouts can turn dependency latency into thread or worker exhaustion.",
+                linter_overlaps=("ruff:S113",),
+                scanner_value="Keeps timeout risk in the antifragility report beside non-Python cancellation and cascade signals.",
                 snippet=stripped[:220],
             )
         )
 
-    if re.search(r"\bfetch\s*\(", line) and "signal" not in line and "AbortController" not in line:
+    if language in {"javascript", "typescript"} and re.search(r"\bfetch\s*\(", line) and "signal" not in line and "AbortController" not in line:
         findings.append(
             Finding(
                 path=rel_path(path, root),
                 line=line_number,
                 source_kind=source_kind,
+                language=language,
                 pattern_id="fetch-without-abort",
                 category="Cascade and ruin risk",
                 concept="bounded downside",
                 why="Fetch calls without cancellation can outlive their usefulness under latency or navigation changes.",
+                linter_overlaps=(),
+                scanner_value="Covers browser and JavaScript cancellation risk outside Ruff's Python-only scope.",
                 snippet=stripped[:220],
             )
         )
@@ -486,6 +686,14 @@ def term_evidence(root: Path, texts: dict[Path, str]) -> tuple[dict[str, int], d
     return term_counts, term_counts_by_source, term_locations
 
 
+def language_file_counts(files: list[Path]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for path in files:
+        language = language_for_path(path)
+        counts[language] = counts.get(language, 0) + 1
+    return dict(sorted(counts.items()))
+
+
 def detect_project_signals(root: Path, files: list[Path], texts: dict[Path, str]) -> dict[str, object]:
     rels = [rel_path(path, root).lower() for path in files]
     joined_paths = "\n".join(rels)
@@ -517,6 +725,7 @@ def detect_project_signals(root: Path, files: list[Path], texts: dict[Path, str]
         "test_file_count": len(test_files),
         "ci_present": bool(ci_files),
         "ci_files": ci_files[:10],
+        "language_file_counts": language_file_counts(files),
         "migration_file_count": len(migration_files),
         "term_counts": term_counts,
         "term_counts_by_source": term_counts_by_source,
@@ -550,6 +759,12 @@ def combined_term_counts(signals: dict[str, object], *names: str) -> tuple[int, 
 
 def format_source_counts(counts: dict[str, int]) -> str:
     return ", ".join(f"{source_kind}: {counts[source_kind]}" for source_kind in SOURCE_KINDS)
+
+
+def format_language_counts(counts: dict[str, int]) -> str:
+    if not counts:
+        return "none detected"
+    return ", ".join(f"{language}: {count}" for language, count in sorted(counts.items()))
 
 
 def sample_term_locations(signals: dict[str, object], *names: str, max_items: int = 3) -> list[dict[str, object]]:
@@ -595,6 +810,7 @@ def markdown_report(result: dict[str, object]) -> str:
         [
             f"- Tests present: {'yes' if signals['tests_present'] else 'not detected'} ({signals['test_file_count']} files)",
             f"- CI present: {'yes' if signals['ci_present'] else 'not detected'}",
+            f"- Languages scanned: {format_language_counts(signals['language_file_counts'])}",
             f"- Migration files detected: {signals['migration_file_count']}",
             f"- Rollback/dry-run mentions: {rollback_total} ({format_source_counts(rollback_by_source)})",
             f"- Feature flag/canary mentions: {rollout_total} ({format_source_counts(rollout_by_source)})",
@@ -648,9 +864,13 @@ def markdown_report(result: dict[str, object]) -> str:
             lines.extend([f"### {category}", ""])
             for item in items:
                 lines.append(
-                    f"- `{item.path}:{item.line}` [{item.source_kind}; {item.pattern_id}; {item.concept}] {item.snippet}"
+                    f"- `{item.path}:{item.line}` [{item.source_kind}; {item.language}; {item.pattern_id}; {item.concept}] {item.snippet}"
                 )
                 lines.append(f"  - Why it matters: {item.why}")
+                if item.linter_overlaps:
+                    overlaps = ", ".join(item.linter_overlaps)
+                    lines.append(f"  - Linter overlap: {overlaps}")
+                lines.append(f"  - Scanner value: {item.scanner_value}")
             lines.append("")
     else:
         lines.extend(["## Heuristic Findings", "", "No pattern findings detected.", ""])
