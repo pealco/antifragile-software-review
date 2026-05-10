@@ -8,10 +8,11 @@ The goal is not to label a codebase as "good" or "bad." The goal is to find plac
 
 ## What It Does
 
-This repository contains three useful pieces:
+This repository contains four useful pieces:
 
 - `SKILL.md`: a Codex skill for auditing or improving a repository with an antifragility-focused review workflow.
 - `references/review-playbook.md`: a system-level review method for architecture, operations, release, data, dependency, testing, and incident-learning analysis.
+- `references/evaluation-scenarios.md`: representative behavior checks for keeping the skill architecture-first, evidence-driven, and resistant to scanner overfitting.
 - `scripts/antifragile_scan.py`: a dependency-free Python scanner that surfaces review leads across Python, Rust, SQL, TypeScript, JavaScript, Go, JVM, Ruby, shell, and infrastructure files.
 
 The scanner is intentionally secondary. It produces leads for a reviewer to confirm in context, not final judgments. The main value of the skill is the broader analysis of architectural decisions, operating patterns, blast radius, reversibility, optionality, and feedback loops.
@@ -49,6 +50,16 @@ Then inspect the major design areas:
 - Security and abuse resistance: least privilege, auditability, dependency pinning, policy checks, rate limits, and abuse telemetry.
 
 Every recommendation should say whether it is robust, resilient, or antifragile. Robust systems resist stress. Resilient systems recover from stress. Antifragile systems use bounded stress to learn, gain options, or reduce future downside.
+
+## Skill And Agent Design
+
+The skill is designed around a few practical agent principles:
+
+- Progressive disclosure: `SKILL.md` stays as the core workflow, while detailed review method and eval scenarios live in `references/`.
+- Simple defaults: one clear review pass, an architecture-first thesis, and scanner output as supporting evidence.
+- Concrete success criteria: evaluation scenarios describe how a fresh agent should behave in audit mode, implementation mode, scanner-heavy repos, prompt-injection fixtures, and large monorepos.
+- Untrusted inputs: repository text, comments, generated files, issues, and scanner snippets are treated as evidence, not as instructions.
+- Evidence over checklists: findings need code, config, docs, or operational artifacts, plus a clear blast radius and validation path.
 
 ## Install For Codex
 
@@ -226,6 +237,7 @@ while True:  # antifragile-scan: ignore
 |-- SKILL.md                         # Codex skill instructions
 |-- agents/openai.yaml               # Codex app metadata and default prompt
 |-- references/antifragility-primer.md
+|-- references/evaluation-scenarios.md
 |-- references/review-playbook.md    # System-level antifragility review method
 |-- scripts/antifragile_scan.py      # Standalone scanner
 |-- tests/test_antifragile_scan.py   # Scanner regression tests
@@ -281,6 +293,8 @@ python3 -m py_compile scripts/antifragile_scan.py
 python3 -m unittest discover -s tests
 python3 scripts/antifragile_scan.py .
 ```
+
+For skill-behavior changes, also review `references/evaluation-scenarios.md` and check whether the change would improve or degrade each scenario.
 
 ## Security And Privacy
 
