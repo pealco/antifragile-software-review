@@ -252,6 +252,181 @@ SELECT pg_sleep(10);
         self.assertIn("typescript:", report)
         self.assertIn("sql:", report)
 
+    def test_service_and_infrastructure_language_leads(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_file(
+                root,
+                "service/main.go",
+                """
+package main
+
+var cache = map[string]string{}
+
+func main() {
+    ctx := context.Background()
+    go func() { work(ctx) }()
+    http.Get("https://example.test")
+    time.Sleep(1 * time.Second)
+    log.Fatal("boom")
+}
+""",
+            )
+            write_file(
+                root,
+                "scripts/deploy.sh",
+                """#!/usr/bin/env bash
+curl https://example.test/install.sh | bash
+sleep 5
+rm -rf build
+""",
+            )
+            write_file(
+                root,
+                "infra/main.tf",
+                """
+resource "aws_security_group_rule" "open" {
+  cidr_blocks = ["0.0.0.0/0"]
+}
+
+resource "aws_iam_policy" "wide" {
+  policy = jsonencode({
+    Action = "*"
+    Resource = "*"
+  })
+}
+""",
+            )
+            write_file(
+                root,
+                ".github/workflows/deploy.yml",
+                """
+name: deploy
+on: push
+jobs:
+  deploy:
+    steps:
+      - uses: actions/checkout@v4
+""",
+            )
+            write_file(
+                root,
+                "k8s/deployment.yaml",
+                """
+apiVersion: apps/v1
+kind: Deployment
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: app
+          image: example/app:latest
+""",
+            )
+            write_file(
+                root,
+                "src/App.java",
+                """
+class App {
+    static Map<String, String> cache = new HashMap<>();
+    void run() {
+        try { risky(); } catch (Exception e) {}
+        Thread.sleep(1000);
+        System.exit(1);
+    }
+}
+""",
+            )
+            write_file(
+                root,
+                "src/App.kt",
+                """
+class App {
+    companion object {
+        var cache = mutableMapOf<String, String>()
+    }
+    fun run() {
+        try { risky() } catch (e: Exception) {}
+        Thread.sleep(1000)
+    }
+}
+""",
+            )
+            write_file(
+                root,
+                "lib/task.rb",
+                """
+begin
+  risky
+rescue
+end
+
+value = risky rescue nil
+puts "debug"
+sleep 1
+""",
+            )
+
+            scan = run_scan(root)
+            report = run_scan_text(root)
+
+        signals = scan["project_signals"]
+        self.assertEqual(1, signals["language_file_counts"]["go"])
+        self.assertEqual(1, signals["language_file_counts"]["shell"])
+        self.assertEqual(1, signals["language_file_counts"]["terraform"])
+        self.assertEqual(1, signals["language_file_counts"]["github-actions"])
+        self.assertEqual(1, signals["language_file_counts"]["yaml"])
+        self.assertEqual(1, signals["language_file_counts"]["java"])
+        self.assertEqual(1, signals["language_file_counts"]["kotlin"])
+        self.assertEqual(1, signals["language_file_counts"]["ruby"])
+
+        patterns = {finding["pattern_id"] for finding in scan["findings"]}
+        self.assertTrue(
+            {
+                "go-context-background",
+                "go-unbounded-goroutine",
+                "go-http-without-timeout",
+                "go-global-var",
+                "shell-missing-strict-mode",
+                "shell-curl-pipe",
+                "terraform-open-cidr",
+                "terraform-wildcard-iam",
+                "github-actions-missing-concurrency",
+                "github-actions-unpinned-action",
+                "kubernetes-single-replica",
+                "kubernetes-latest-image",
+                "kubernetes-missing-resource-limits",
+                "kubernetes-missing-health-probes",
+                "java-kotlin-broad-catch",
+                "java-kotlin-static-mutable",
+                "ruby-bare-rescue",
+                "ruby-rescue-nil",
+            }.issubset(patterns)
+        )
+
+        def has_finding(pattern_id: str, language: str) -> bool:
+            return any(
+                finding["pattern_id"] == pattern_id and finding["language"] == language
+                for finding in scan["findings"]
+            )
+
+        self.assertTrue(has_finding("go-context-background", "go"))
+        self.assertTrue(has_finding("shell-missing-strict-mode", "shell"))
+        self.assertTrue(has_finding("terraform-open-cidr", "terraform"))
+        self.assertTrue(has_finding("github-actions-unpinned-action", "github-actions"))
+        self.assertTrue(has_finding("kubernetes-missing-health-probes", "yaml"))
+        self.assertTrue(has_finding("java-kotlin-broad-catch", "java"))
+        self.assertTrue(has_finding("java-kotlin-broad-catch", "kotlin"))
+        self.assertTrue(has_finding("ruby-bare-rescue", "ruby"))
+        self.assertIn("rubocop:Style/RescueStandardError", next(
+            finding["linter_overlaps"]
+            for finding in scan["findings"]
+            if finding["pattern_id"] == "ruby-bare-rescue"
+        ))
+        self.assertIn("github-actions:", report)
+        self.assertIn("terraform:", report)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -40,6 +40,7 @@ SKIP_DIRS = {
 
 TEXT_SUFFIXES = {
     ".bat",
+    ".bash",
     ".c",
     ".cc",
     ".cfg",
@@ -72,6 +73,7 @@ TEXT_SUFFIXES = {
     ".sql",
     ".swift",
     ".tf",
+    ".tfvars",
     ".toml",
     ".ts",
     ".tsx",
@@ -79,6 +81,7 @@ TEXT_SUFFIXES = {
     ".xml",
     ".yaml",
     ".yml",
+    ".zsh",
 }
 
 TEXT_FILENAMES = {
@@ -102,7 +105,7 @@ CONFIG_FILENAMES = {
     "requirements.txt",
 }
 
-CONFIG_SUFFIXES = {".cfg", ".conf", ".gradle", ".json", ".properties", ".tf", ".toml", ".yaml", ".yml"}
+CONFIG_SUFFIXES = {".cfg", ".conf", ".gradle", ".json", ".properties", ".tf", ".tfvars", ".toml", ".yaml", ".yml"}
 DOC_SUFFIXES = {".adoc", ".md", ".rst", ".txt"}
 DOC_DIR_NAMES = {"doc", "docs", "reference", "references", "runbook", "runbooks"}
 TEST_DIR_NAMES = {"__tests__", "spec", "test", "tests"}
@@ -112,6 +115,7 @@ SOURCE_KINDS = ("code", "config", "docs", "tests")
 
 LANGUAGE_BY_SUFFIX = {
     ".c": "c",
+    ".bash": "shell",
     ".cc": "cpp",
     ".conf": "config",
     ".cpp": "cpp",
@@ -139,12 +143,14 @@ LANGUAGE_BY_SUFFIX = {
     ".sql": "sql",
     ".swift": "swift",
     ".tf": "terraform",
+    ".tfvars": "terraform",
     ".toml": "toml",
     ".ts": "typescript",
     ".tsx": "typescript",
     ".xml": "xml",
     ".yaml": "yaml",
     ".yml": "yaml",
+    ".zsh": "shell",
 }
 
 LANGUAGE_BY_FILENAME = {
@@ -226,9 +232,9 @@ PATTERNS = [
         "fixed-sleep",
         "Prediction and timing dependence",
         "prediction dependence",
-        r"\b(time\.)?sleep\s*\(|\bThread\.sleep\s*\(|\bthread::sleep\s*\(|\btokio::time::sleep\s*\(|\bpg_sleep\s*\(|\bsetTimeout\s*\(|\bsetInterval\s*\(|\bawait\b.*\bsleep\s*\(",
+        r"\b(time\.)?sleep\s*\(|\bThread\.sleep\s*\(|\bthread::sleep\s*\(|\btokio::time::sleep\s*\(|\bpg_sleep\s*\(|\bsetTimeout\s*\(|\bsetInterval\s*\(|\bawait\b.*\bsleep\s*\(|^\s*sleep\s+[0-9.]",
         "Fixed sleeps often encode timing predictions where event-driven checks or bounded retries are safer.",
-        scanner_value="Flags timing predictions across Python, Rust, SQL, TypeScript, and JavaScript.",
+        scanner_value="Flags timing predictions across Python, Rust, SQL, TypeScript, JavaScript, Go, JVM, Ruby, and shell code.",
     ),
     Pattern(
         "magic-timeout",
@@ -248,7 +254,7 @@ PATTERNS = [
         "process-abort",
         "Cascade and ruin risk",
         "bounded downside",
-        r"\b(sys\.exit|process\.exit|std::process::exit|Deno\.exit|os\.Exit|log\.Fatal|panic!|panic\s*\(|abort\s*\()",
+        r"\b(sys\.exit|process\.exit|std::process::exit|Deno\.exit|System\.exit|os\.Exit|log\.Fatal|panic!|panic\s*\(|abort\s*\(|exit\s+[0-9])",
         "Process-level aborts can turn local errors into system-wide outages.",
         scanner_value="Surfaces process-level aborts across runtimes so reviewers can bound local failures.",
     ),
@@ -341,6 +347,60 @@ PATTERNS = [
         scanner_value="Connects Rust debug output to operational feedback quality.",
     ),
     Pattern(
+        "go-context-background",
+        "Cascade and ruin risk",
+        "bounded downside",
+        r"\bcontext\.(Background|TODO)\s*\(",
+        "Root contexts can lose cancellation, deadline, and ownership signals unless they are intentionally scoped.",
+        languages=("go",),
+        scanner_value="Frames Go context roots as cancellation-boundary leads; confirm whether a request or job context should flow through.",
+    ),
+    Pattern(
+        "go-unbounded-goroutine",
+        "Cascade and ruin risk",
+        "bounded downside",
+        r"^\s*go\s+(func\s*\(|\w+\s*\()",
+        "Untracked goroutines can outlive their owner unless cancellation, backpressure, and error reporting are explicit.",
+        languages=("go",),
+        scanner_value="Surfaces Go concurrency ownership risk that needs code-reading confirmation.",
+    ),
+    Pattern(
+        "go-http-without-timeout",
+        "Cascade and ruin risk",
+        "bounded downside",
+        r"\bhttp\.(Get|Head|Post|PostForm)\s*\(",
+        "Package-level Go HTTP helpers use the default client, which can wait indefinitely without an explicit timeout.",
+        languages=("go",),
+        scanner_value="Adds Go dependency-latency risk beside Python and JavaScript outbound-call cancellation leads.",
+    ),
+    Pattern(
+        "go-global-var",
+        "Centralized state and tight coupling",
+        "decentralization",
+        r"^\s*var\s+\w+(?:\s|=|\[)",
+        "Package-level mutable variables can concentrate state and make failure order-dependent.",
+        languages=("go",),
+        scanner_value="Heuristic Go mutable-state lead; confirm scope manually because the scanner is not parsing Go blocks.",
+    ),
+    Pattern(
+        "java-kotlin-broad-catch",
+        "Silent failure and lost learning",
+        "skin in the game / feedback",
+        r"\bcatch\s*\(\s*(?:(?:\w+)\s*:\s*)?(?:[\w.]+\.)?(Exception|Throwable)\b",
+        "Broad JVM catches can turn failures into vague recovery paths unless logging, metrics, or rethrow behavior is explicit.",
+        languages=("java", "kotlin"),
+        scanner_value="Frames Java/Kotlin broad catches as feedback-loss leads rather than style violations.",
+    ),
+    Pattern(
+        "java-kotlin-static-mutable",
+        "Centralized state and tight coupling",
+        "decentralization",
+        r"^\s*(?:public|private|protected)?\s*static\s+(?!final\b)|\bcompanion\s+object\b",
+        "Static mutable state and companion objects can concentrate downside and hide replacement boundaries.",
+        languages=("java", "kotlin"),
+        scanner_value="Surfaces JVM central-state leads; confirm mutability and lifecycle in context.",
+    ),
+    Pattern(
         "typescript-explicit-any",
         "Prediction and timing dependence",
         "optionality / feedback",
@@ -349,6 +409,79 @@ PATTERNS = [
         languages=("typescript",),
         linter_overlaps=("@typescript-eslint:no-explicit-any",),
         scanner_value="Frames TypeScript type erasure as lost feedback and contract optionality.",
+    ),
+    Pattern(
+        "ruby-bare-rescue",
+        "Silent failure and lost learning",
+        "skin in the game / feedback",
+        r"^\s*rescue\s*(?:#.*)?$",
+        "Bare rescue hides the failure class and can turn incidents into ambiguous recovery paths.",
+        languages=("ruby",),
+        linter_overlaps=("rubocop:Style/RescueStandardError",),
+        scanner_value="Adds Ruby failure-feedback framing while leaving precise Ruby style enforcement to RuboCop.",
+    ),
+    Pattern(
+        "ruby-rescue-nil",
+        "Silent failure and lost learning",
+        "skin in the game / feedback",
+        r"\brescue\s+nil\b",
+        "Rescue-to-nil can erase failure evidence and make downstream behavior depend on absence rather than ownership.",
+        languages=("ruby",),
+        scanner_value="Highlights Ruby fallback paths that may need logging, metrics, or narrower rescue boundaries.",
+    ),
+    Pattern(
+        "shell-curl-pipe",
+        "Irreversibility",
+        "optionality / reversibility",
+        r"\b(curl|wget)\b.*\|\s*(sh|bash|zsh)\b",
+        "Piping downloaded code into a shell removes review, pinning, and rollback opportunities.",
+        languages=("shell",),
+        scanner_value="Flags shell supply-chain and reversibility risk; dedicated shell/security tools should do deeper validation.",
+    ),
+    Pattern(
+        "terraform-open-cidr",
+        "Cascade and ruin risk",
+        "bounded downside",
+        r"0\.0\.0\.0/0",
+        "Open ingress or egress CIDRs can create broad blast radius unless deliberately bounded by other controls.",
+        languages=("terraform",),
+        scanner_value="Surfaces Terraform exposure leads for reviewer confirmation; infrastructure security scanners should provide precision.",
+    ),
+    Pattern(
+        "terraform-wildcard-iam",
+        "Cascade and ruin risk",
+        "bounded downside",
+        r"\b(Action|Resource)\s*=\s*\"\*\"",
+        "Wildcard IAM actions or resources can concentrate privilege and expand blast radius.",
+        languages=("terraform",),
+        scanner_value="Flags Terraform IAM optionality and downside-concentration leads without replacing policy analyzers.",
+    ),
+    Pattern(
+        "kubernetes-single-replica",
+        "Cascade and ruin risk",
+        "redundancy and slack",
+        r"^\s*replicas\s*:\s*1\s*(?:#.*)?$",
+        "Single-replica workloads have little redundancy unless an external recovery path is explicit.",
+        languages=("yaml",),
+        scanner_value="Treats Kubernetes replica count as an availability lead, not proof of insufficient resilience.",
+    ),
+    Pattern(
+        "kubernetes-latest-image",
+        "Prediction and timing dependence",
+        "optionality / reversibility",
+        r"^\s*image\s*:\s*[^#\s]+:latest\s*(?:#.*)?$",
+        "Mutable latest tags make deploys harder to reproduce and roll back.",
+        languages=("yaml",),
+        scanner_value="Surfaces Kubernetes image reproducibility risk; confirm deployment tooling and registry policy.",
+    ),
+    Pattern(
+        "github-actions-unpinned-action",
+        "Prediction and timing dependence",
+        "optionality / reversibility",
+        r"^\s*-\s*uses\s*:\s*[^@\s#]+@(?![a-f0-9]{40}\b)[^\s#]+",
+        "Actions pinned to moving tags can change behavior outside the repository's control.",
+        languages=("github-actions",),
+        scanner_value="Flags CI supply-chain drift; actionlint and policy checks can provide deeper workflow validation.",
     ),
     Pattern(
         "sql-destructive-schema",
@@ -466,9 +599,55 @@ def classify_path(path: Path) -> str:
 
 
 def language_for_path(path: Path) -> str:
+    parts = {part.lower() for part in path.parts}
+    if path.suffix.lower() in {".yaml", ".yml"} and ".github" in parts and "workflows" in parts:
+        return "github-actions"
     if path.name in LANGUAGE_BY_FILENAME:
         return LANGUAGE_BY_FILENAME[path.name]
     return LANGUAGE_BY_SUFFIX.get(path.suffix.lower(), "text")
+
+
+def first_matching_line(text: str, regex: str) -> tuple[int, str] | None:
+    compiled = re.compile(regex, re.IGNORECASE)
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        if compiled.search(line):
+            return line_number, line.strip()[:220]
+    return None
+
+
+def first_nonempty_line(text: str) -> tuple[int, str]:
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        if stripped:
+            return line_number, stripped[:220]
+    return 1, ""
+
+
+def shell_strict_mode_present(text: str) -> bool:
+    has_errexit = False
+    has_nounset = False
+    has_pipefail = False
+
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("set "):
+            continue
+        has_errexit = has_errexit or bool(re.search(r"(^|\s)-[A-Za-z]*e[A-Za-z]*\b|\berrexit\b", stripped))
+        has_nounset = has_nounset or bool(re.search(r"(^|\s)-[A-Za-z]*u[A-Za-z]*\b|\bnounset\b", stripped))
+        has_pipefail = has_pipefail or "pipefail" in stripped
+
+    return has_errexit and has_nounset and has_pipefail
+
+
+def file_ignore_applies(text: str, pattern_id: str) -> bool:
+    for line in text.splitlines():
+        match = INLINE_IGNORE_RE.search(line)
+        if not match or not match.group(1):
+            continue
+        ignored_ids = {item.strip() for item in re.split(r"[,\s]+", match.group(1)) if item.strip()}
+        if pattern_id in ignored_ids:
+            return True
+    return False
 
 
 def ignore_applies(line: str, pattern_id: str) -> bool:
@@ -551,6 +730,13 @@ def find_pattern_matches(
     source_kind = classify_path(path)
     language = language_for_path(path)
 
+    for finding in custom_file_findings(root, path, source_kind, language, text):
+        if pattern_counts.get(finding.pattern_id, 0) >= max_per_pattern:
+            omitted_counts[finding.pattern_id] = omitted_counts.get(finding.pattern_id, 0) + 1
+            continue
+        pattern_counts[finding.pattern_id] = pattern_counts.get(finding.pattern_id, 0) + 1
+        findings.append(finding)
+
     for line_number, line in enumerate(text.splitlines(), start=1):
         stripped = line.strip()
         if not stripped:
@@ -596,6 +782,96 @@ def find_pattern_matches(
                 continue
             pattern_counts[finding.pattern_id] = pattern_counts.get(finding.pattern_id, 0) + 1
             findings.append(finding)
+
+    return findings
+
+
+def custom_file_findings(
+    root: Path,
+    path: Path,
+    source_kind: str,
+    language: str,
+    text: str,
+) -> list[Finding]:
+    findings: list[Finding] = []
+
+    if source_kind not in {"code", "config"}:
+        return findings
+
+    def add(
+        pattern_id: str,
+        category: str,
+        concept: str,
+        why: str,
+        scanner_value: str,
+        line_number: int,
+        snippet: str,
+    ) -> None:
+        if file_ignore_applies(text, pattern_id):
+            return
+        findings.append(
+            Finding(
+                path=rel_path(path, root),
+                line=line_number,
+                source_kind=source_kind,
+                language=language,
+                pattern_id=pattern_id,
+                category=category,
+                concept=concept,
+                why=why,
+                linter_overlaps=(),
+                scanner_value=scanner_value,
+                snippet=snippet,
+            )
+        )
+
+    if language == "shell" and not shell_strict_mode_present(text):
+        line_number, snippet = first_nonempty_line(text)
+        add(
+            "shell-missing-strict-mode",
+            "Silent failure and lost learning",
+            "skin in the game / feedback",
+            "Shell scripts without strict error handling can continue after failed commands and lose failure evidence.",
+            "Checks a shell-script-level failure mode that line linters may not frame as operational feedback loss.",
+            line_number,
+            snippet,
+        )
+
+    if language == "github-actions" and not re.search(r"^\s*concurrency\s*:", text, re.IGNORECASE | re.MULTILINE):
+        line_number, snippet = first_nonempty_line(text)
+        add(
+            "github-actions-missing-concurrency",
+            "Cascade and ruin risk",
+            "bounded downside",
+            "Workflows without concurrency controls can overlap deploys or repeated expensive jobs under churn.",
+            "Treats workflow concurrency as a blast-radius lead for CI/CD review, not a universal requirement.",
+            line_number,
+            snippet,
+        )
+
+    workload_match = first_matching_line(text, r"^\s*kind\s*:\s*(Deployment|StatefulSet|DaemonSet)\s*$")
+    if language == "yaml" and workload_match:
+        kind_line, kind_snippet = workload_match
+        if not re.search(r"^\s*resources\s*:", text, re.IGNORECASE | re.MULTILINE):
+            add(
+                "kubernetes-missing-resource-limits",
+                "Cascade and ruin risk",
+                "bounded downside",
+                "Kubernetes workloads without resource settings can let one workload consume shared cluster capacity.",
+                "Surfaces capacity-blast-radius leads; confirm defaults, LimitRanges, and platform policy in context.",
+                kind_line,
+                kind_snippet,
+            )
+        if not re.search(r"^\s*(readinessProbe|livenessProbe)\s*:", text, re.IGNORECASE | re.MULTILINE):
+            add(
+                "kubernetes-missing-health-probes",
+                "Silent failure and lost learning",
+                "feedback",
+                "Kubernetes workloads without readiness or liveness probes provide weak feedback to schedulers and deploys.",
+                "Surfaces workload feedback-loop gaps; confirm whether probes are injected or managed elsewhere.",
+                kind_line,
+                kind_snippet,
+            )
 
     return findings
 

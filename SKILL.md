@@ -29,7 +29,7 @@ python3 /path/to/antifragile-software-review/scripts/antifragile_scan.py /path/t
 
 Use scanner output as a lead list only. Confirm important claims by reading the relevant code, tests, docs, and deployment configuration. Treat operational term counts as mention locations, not proof that rollback, canary, observability, or incident-learning capabilities actually work.
 
-The scanner is language-aware but intentionally heuristic. It includes generic leads plus first-pass Python, Rust, SQL, TypeScript, and JavaScript signals. Prefer ecosystem linters for precise linting; use scanner `linter_overlaps` as a hint that the same code shape may already be covered by Ruff, Clippy, ESLint, TypeScript ESLint, or another language-specific tool.
+The scanner is language-aware but intentionally heuristic. It includes generic leads plus first-pass Python, Rust, SQL, TypeScript, JavaScript, Go, Java, Kotlin, Ruby, shell, Terraform, Kubernetes YAML, and GitHub Actions signals. Prefer ecosystem linters and infrastructure policy tools for precise validation; use scanner `linter_overlaps` as a hint that the same code shape may already be covered by Ruff, Clippy, ESLint, TypeScript ESLint, RuboCop, ShellCheck, actionlint, tfsec, Checkov, or another language-specific tool.
 
 Useful scanner controls:
 
