@@ -41,7 +41,13 @@ Claude Code compatibility:
    - Feedback loops: metrics, logs, traces, SLOs, tests, runbooks, incident reviews, and ownership.
    - Optionality: where the system can change course cheaply and where it is locked into one choice.
 
-5. Run the heuristic scanner for supporting leads:
+5. Trace at least one high-exposure critical flow before ranking findings.
+   - Follow the flow from trigger to state mutation, dependency calls, failure handling, observability, rollback or degradation path, and owner.
+   - Name what evidence exists for each step and what is missing.
+   - Classify the stress response curve: capped harm, linear harm, superlinear harm, or convex gain from safe stress.
+   - Use the trace to decide which scanner leads matter. A small smell on a critical flow can outrank many disconnected matches.
+
+6. Run the heuristic scanner for supporting leads:
 
 ```bash
 python3 "${CLAUDE_SKILL_DIR}/scripts/antifragile_scan.py" /path/to/repo
@@ -61,7 +67,7 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/antifragile_scan.py" /path/to/repo --exclud
 
 Add `antifragile-scan: ignore` or `antifragile-scan: ignore[pattern-id]` on a line only when the signal is intentionally reviewed and harmless.
 
-6. Search manually for antifragility failure modes:
+7. Search manually for antifragility failure modes:
    - Silent failure: swallowed exceptions, empty catches, ignored errors, best-effort paths with no metric or alert.
    - Downside concentration: single process, region, queue, database, credential, deploy path, owner, or global state whose failure cascades.
    - Prediction dependence: fixed sleeps, magic thresholds, calendar assumptions, forecast-driven capacity, brittle ordering assumptions.
@@ -70,8 +76,10 @@ Add `antifragile-scan: ignore` or `antifragile-scan: ignore[pattern-id]` on a li
    - Missing feedback loops: weak observability, no SLOs/error budgets, no incident review artifacts, no regression tests from prior incidents.
    - Fragile optimization: saturated queues, no slack, maximized utilization, no backpressure, no rate limits, no load shedding.
    - Unsafe experimentation: no feature flags, canaries, circuit breakers, kill switches, staged rollout, contract tests, or blast-radius limits.
+   - Data ruin: backfills, deletes, migrations, billing actions, or external side effects without dry-run counts, checkpoints, idempotency, restore drills, or audit trails.
+   - Incident amnesia: incidents create tickets or cleanup work but no regression tests, dashboards, runbook updates, ownership changes, or safer defaults.
 
-7. Map evidence to antifragile levers.
+8. Map evidence to antifragile levers.
    - Via negativa: remove the fragile thing before adding machinery.
    - Barbell: make the core boring, protected, and recoverable; isolate high-upside experiments behind reversible boundaries.
    - Optionality: add cheap options to change course, such as interfaces, feature flags, rollbacks, dry-runs, idempotency, adapters, and replaceable dependencies.
@@ -80,15 +88,20 @@ Add `antifragile-scan: ignore` or `antifragile-scan: ignore[pattern-id]` on a li
    - Redundancy and slack: preserve spare capacity, backup paths, retries with budgets, bulkheads, queues, and graceful degradation.
    - Decentralization: contain failures locally and let teams/components learn independently where possible.
    - Skin in the game: make ownership, alerts, dashboards, and post-incident follow-through visible to the people changing the system.
+   - Gain mechanism: state whether the move creates faster learning, smaller blast radius, cheaper reversal, safer experimentation, dependency optionality, or incident-to-test conversion.
 
-8. Rank recommendations by fragility exposure.
+9. Rank recommendations by fragility exposure.
    - Prioritize ruin risks and irreversible actions first.
    - Prefer small, reversible changes that create learning loops.
+   - Score confirmed findings with the exposure model in `references/review-playbook.md`: blast radius, irreversibility, feedback delay, dependency concentration, and ruin potential.
+   - Report evidence quality separately from exposure: direct critical-flow evidence, config/test/deploy evidence, operational artifact, docs-only, or scanner-only.
    - Use the evidence ladder from `references/review-playbook.md`: direct critical-flow evidence beats scanner-only or docs-only leads.
    - Separate robust/resilient fixes from truly antifragile fixes. A retry may be robust; a retry budget with metrics, alerting, and an incident-derived regression test is closer to antifragile.
+   - Before recommending an abstraction, apply the optionality test: real uncertainty, plausible second option, cheap boundary, justified carrying cost, and observable use.
+   - When evidence is missing, recommend the cheapest observation that would raise confidence instead of inflating certainty.
    - Keep the process simple: prefer one agent and a clear evidence trail unless the user or harness explicitly calls for parallel specialists.
 
-9. In implementation mode, close the loop.
+10. In implementation mode, close the loop.
    - Patch one or more small, high-leverage changes that bound downside or create learning.
    - Add validation that will fail if the fragility comes back: regression tests, scanner tests, CI checks, metrics assertions, dry-run checks, or documented verification commands.
    - Re-run the relevant tests, scanner, and format/lint commands. If validation cannot run, say exactly what blocked it.
@@ -116,17 +129,34 @@ Start with the architectural thesis, then findings. Do not let scanner output do
 - Feedback loops:
 - Ownership and optionality:
 
+## Critical Flow Trace
+
+- Flow traced:
+- Trigger and entrypoint:
+- State/data mutation:
+- Dependencies:
+- Failure handling:
+- Observability and ownership:
+- Rollback/degradation path:
+- Stress response curve: capped / linear / superlinear / convex.
+- Missing evidence:
+- Cheapest observation:
+
 ## Findings
 
 - [P1] Short title
   Evidence: `path/file.ext:123`
-  Evidence quality: direct code path / config signal / docs-only / inference.
+  Evidence quality: direct critical-flow path / config-test-deploy signal / operational artifact / docs-only / scanner-only / inference.
   Analysis area: architecture / data / release / dependency / observability / testing / security.
+  Exposure score: N/15 (blast radius, irreversibility, feedback delay, dependency concentration, ruin potential).
   Fragility: why volatility, errors, growth, or uncertainty hurts this design.
   Blast radius: what fails and who or what is affected.
   Reversibility: how easy the proposed move is to roll back or bound.
+  Stress response curve: capped / linear / superlinear / convex.
   Antifragile move: concrete change that bounds downside and creates learning/options.
+  Gain mechanism: faster learning / smaller blast radius / cheaper reversal / safer experimentation / dependency optionality / incident-to-test conversion.
   Robust vs antifragile delta: why this produces feedback, optionality, or safer stress rather than only durability.
+  Missing evidence and cheapest observation:
   Validation: test, experiment, metric, or code-reading step that would prove the change.
   Confidence: high / medium / low, with the reason.
 
@@ -137,6 +167,7 @@ Start with the architectural thesis, then findings. Do not let scanner output do
 - Stress-learning experiments:
 - Observability and ownership:
 - Structural bets:
+- Missing evidence / cheapest observations:
 - Scanner leads to verify:
 - Next reversible patch:
 ```

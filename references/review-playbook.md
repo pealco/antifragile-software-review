@@ -6,9 +6,13 @@ This playbook keeps the review focused on architecture, operating model, design 
 
 - Review Thesis
 - System Map
+- Critical Flow Trace
 - Analysis Dimensions
+- Fragility Response Curves
+- Exposure Scoring
 - Domain Playbooks
 - Agent Execution Guidance
+- Missing Evidence
 - Recommendation Rules
 - Evidence Ladder
 
@@ -40,6 +44,24 @@ Build a minimal map before recommending changes:
 
 Use scanner results as search leads inside this map. For example, an uncancelled HTTP call matters more if it is on a critical request path with no queue, timeout budget, or degraded mode.
 
+## Critical Flow Trace
+
+Trace at least one high-exposure flow before ranking findings. The trace keeps the review connected to real blast radius instead of disconnected smells.
+
+Use this template:
+
+| Step | Evidence to collect |
+| --- | --- |
+| Trigger and entrypoint | Request route, job trigger, CLI command, deploy event, queue consumer, webhook, scheduled task. |
+| State/data mutation | Database writes, migrations, files, caches, external side effects, billing or notification actions. |
+| Dependencies | Services, queues, vendors, regions, models, secrets, CLIs, libraries, feature flags, deploy tools. |
+| Failure handling | Timeouts, retries, budgets, idempotency, compensation, circuit breakers, dead letters, partial-write handling. |
+| Feedback | Metrics, logs, traces, alerts, SLOs, tests, dashboards, runbooks, incident links. |
+| Reversal or degradation | Rollback, dry-run, restore, replay, kill switch, feature flag, graceful degradation, manual repair path. |
+| Ownership | Who receives the alert, approves rollback, maintains the runbook, and pays the cost of fragility. |
+
+If any step has no evidence, record the gap as missing evidence and recommend the cheapest observation that would answer it. Do not fill gaps with optimistic assumptions.
+
 ## Analysis Dimensions
 
 Assess each important design area with these dimensions:
@@ -55,15 +77,66 @@ Assess each important design area with these dimensions:
 | Incident learning | Incidents create cleanup work but no durable learning. | Turn incidents into tests, dashboards, runbook updates, ownership changes, and safer defaults. |
 | Optionality | A design choice locks in one vendor, schema, protocol, runtime, or team bottleneck. | Introduce replaceable boundaries only where uncertainty is real and carrying cost is justified. |
 
+## Fragility Response Curves
+
+For important findings, classify how the system responds as stress increases:
+
+| Curve | Meaning | Common evidence |
+| --- | --- | --- |
+| Capped harm | Loss is bounded and recovery is understood. | Rate limits, bounded queues, rollback, idempotency, graceful degradation, restore tests. |
+| Linear harm | More stress causes proportional pain but no obvious cascade. | Manual cleanup grows with volume, isolated latency increases, recoverable backlog. |
+| Superlinear harm | Small stress can trigger cascading, compounding, or irreversible damage. | Retry storms, unbounded queues, global locks, shared mutable state, destructive scripts, missing rollback. |
+| Convex gain | Bounded stress improves future behavior. | Fault tests create regression coverage, incidents update runbooks and alerts, canaries produce release gates, restore drills harden backups. |
+
+The best antifragility opportunities convert superlinear harm into capped harm first, then into feedback or safe-stress loops that create convex gain.
+
+## Exposure Scoring
+
+Use exposure scoring to rank confirmed findings. Score each factor from 0 to 3, then sum to `N/15`.
+
+| Factor | 0 | 1 | 2 | 3 |
+| --- | --- | --- | --- | --- |
+| Blast radius | Local and disposable. | One component or noncritical path. | Important workflow or multiple components. | Product-wide, customer-visible, deploy-wide, money-moving, or data-wide. |
+| Irreversibility | Easy rollback or no lasting state. | Manual rollback is available. | Rollback is partial, slow, or untested. | Irreversible data, billing, external side effects, or one-way deploy. |
+| Feedback delay | Immediate test or metric. | Same-day logs or owner review. | Delayed user report, batch check, or manual discovery. | Silent failure or discovery only after broad damage. |
+| Dependency concentration | No single dependency bottleneck. | Replaceable dependency with degradation path. | One important vendor, region, queue, model, secret, or owner. | Single dependency can halt or corrupt the critical flow. |
+| Ruin potential | No durable harm. | Annoyance or recoverable delay. | Costly cleanup, data repair, or trust damage. | Data loss, security exposure, financial harm, legal risk, or unrecoverable customer impact. |
+
+Report evidence quality separately from exposure:
+
+1. Direct critical-flow code or config evidence.
+2. Test, CI, migration, deploy, or infrastructure evidence.
+3. Runtime artifact such as logs, dashboards, runbooks, or incident notes.
+4. Documentation claim with partial implementation support.
+5. Scanner-only or docs-only lead.
+
+High exposure with weak evidence should become a high-priority observation, not an overconfident finding.
+
 ## Domain Playbooks
 
 ### Architecture And Coupling
 
 Look for central modules, implicit temporal ordering, cross-layer imports, shared mutable state, and abstractions that hide blast radius. Prefer simpler boundaries that make failure local and replacement cheap. Do not recommend abstraction for its own sake; recommend it when it creates real optionality around uncertainty.
 
+Before recommending an abstraction, test it:
+
+- Is the uncertainty real and likely to matter?
+- Is there a plausible second implementation, provider, protocol, schema, or workflow?
+- Does the boundary reduce replacement cost without hiding failure modes?
+- Is the carrying cost smaller than the option value?
+- Will usage, failure, or switching pressure be observable?
+
 ### Data And Migrations
 
 Prioritize irreversible writes, destructive migrations, backfills, data repair scripts, and schema changes crossing deploy boundaries. Strong moves include expand-contract migrations, dry-run counts, idempotent backfills, checkpoints, restore drills, and data invariants that fail before damage spreads.
+
+Data-ruin checks are especially important:
+
+- Can the operation run in dry-run mode with counts and sample rows?
+- Is it idempotent if interrupted and resumed?
+- Are checkpoints, batch limits, and rollback or repair instructions present?
+- Is there an audit trail for who changed what and why?
+- Has restore or replay been tested recently enough to trust?
 
 ### Release And Deployment
 
@@ -77,6 +150,13 @@ Map what happens when a dependency is slow, unavailable, expensive, inconsistent
 
 Check whether failures become durable knowledge. Useful evidence includes SLOs, error budgets, dashboards tied to critical flows, alerts with owners, runbooks, incident reviews, and regression tests from prior incidents. Logging alone is not a feedback loop unless someone acts on it.
 
+Incident-learning checks:
+
+- Does a prior incident produce a test, monitor, runbook update, safer default, or ownership change?
+- Can an alert recipient identify the affected flow, rollback path, and validation step?
+- Are repeated incidents getting cheaper to detect, contain, and fix?
+- Are post-incident actions tracked near the code, deployment, or operational artifact they affect?
+
 ### Testing And Safe Stress
 
 Look beyond happy-path unit tests. Valuable stressors include property tests, mutation tests, load tests, fault injection, dependency failure tests, replay tests, migration dry-runs, restore drills, and game days. The key is bounded downside plus learning.
@@ -84,6 +164,30 @@ Look beyond happy-path unit tests. Valuable stressors include property tests, mu
 ### Security And Abuse Resistance
 
 Treat security controls as antifragility when they reduce blast radius and generate learning. Look for least privilege, credential rotation, auditability, dependency pinning, policy checks, input validation, rate limiting, and abuse telemetry. Avoid presenting scanner hints as proof of vulnerability.
+
+### Web And API Services
+
+Trace at least one critical request from route to state mutation and response. Look for timeout budgets, cancellation propagation, backpressure, idempotency keys, authz boundaries, rate limits, degraded responses, structured telemetry, and deploy or feature-flag controls around user-visible changes.
+
+### Data Pipelines
+
+Trace one ingestion, transform, and publication path. Look for replayability, schema evolution, bad-record quarantine, batch checkpoints, partial-output handling, lineage, freshness alerts, and downstream contract tests.
+
+### CLI And Automation Scripts
+
+Treat CLIs as operational machinery. Look for dry-run modes, confirmation boundaries, idempotency, explicit target selection, safe defaults, shell strictness, audit output, and recovery instructions for interrupted runs.
+
+### Infrastructure And IaC
+
+Review state backends, plan/apply separation, policy checks, secret handling, resource deletion protection, pinned providers/actions/images, concurrency controls, drift detection, and rollback or rebuild paths.
+
+### LLM And Agent Systems
+
+Review prompt and tool boundaries, untrusted input handling, tool permission scope, evals, refusal and escalation paths, traceability, replayability, cost/rate limits, model/provider fallback, and incident learning from bad agent actions.
+
+### Libraries And Packages
+
+Review public API stability, semantic versioning, deprecation paths, dependency ranges, test matrices, fuzz/property tests, security response, release provenance, and whether downstream users can detect and recover from breaking changes.
 
 ## Agent Execution Guidance
 
@@ -94,15 +198,34 @@ Treat security controls as antifragility when they reduce blast radius and gener
 - Use scanner findings as pointers into code reading. A scanner-only match should become a major finding only after it is tied to a critical flow, operational artifact, or credible blast radius.
 - If important evidence is missing, recommend the cheapest next observation: read a runbook, inspect a deploy workflow, run a dry-run, check a dashboard, add a regression test, or trace one critical path.
 
+## Missing Evidence
+
+Missing evidence is a first-class output. It should not be hidden inside caveats.
+
+Good missing-evidence entries name:
+
+- the claim that cannot be verified,
+- the artifact that would verify it,
+- the cheapest observation to get that artifact,
+- whether the gap blocks the recommendation or only lowers confidence.
+
+Examples:
+
+- Unknown whether rollback works. Cheapest observation: inspect the latest deploy run and find a successful rollback or rollback drill.
+- Unknown whether backfills are resumable. Cheapest observation: run the backfill in dry-run mode against a small fixture and interrupt it.
+- Unknown whether alerts have owners. Cheapest observation: inspect alert routing and the linked runbook for the critical flow.
+
 ## Recommendation Rules
 
 - Prefer removing fragile mechanisms before adding new machinery.
 - Tie every recommendation to a stressor and a blast radius.
 - State whether the move is robust, resilient, or antifragile.
+- State the gain mechanism: faster learning, smaller blast radius, cheaper reversal, safer experimentation, dependency optionality, or incident-to-test conversion.
 - Prefer small reversible patches that create learning loops.
 - Do not overfit to scanner output. A scanner hit outside a critical path may be lower priority than an architectural single point of failure with no regex signal.
 - Separate confirmed findings from open questions.
 - When confidence is low, recommend the cheapest observation that would raise confidence.
+- Do not recommend abstraction for optionality unless the optionality test passes.
 
 ## Evidence Ladder
 

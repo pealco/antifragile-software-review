@@ -19,6 +19,17 @@ The most useful technical interpretation is convexity: a system is fragile when 
 | Decentralization | Can components fail and learn locally? | Bounded contexts, local ownership, isolated deploys, independent data paths, limited shared state |
 | Skin in the game | Do decision-makers feel consequences? | Clear owners, actionable alerts, dashboards, post-incident action items, release gates tied to SLOs |
 
+## Response Curves
+
+When reviewing a design, ask how harm changes as stress increases:
+
+- Capped harm: the system absorbs the shock, limits damage, and has a known recovery path.
+- Linear harm: more stress creates proportional cleanup or delay, but not a cascade.
+- Superlinear harm: a small stressor can trigger compounding damage, such as retry storms, data corruption, global outages, or irreversible side effects.
+- Convex gain: a bounded stressor improves the system by creating tests, alerts, runbook updates, safer defaults, or better release gates.
+
+The practical antifragile move is usually two-step: cap superlinear harm first, then add feedback or safe stress so future shocks create learning.
+
 ## Fragility Smells
 
 - The code assumes the happy path and discards evidence when reality differs.
@@ -39,6 +50,8 @@ Prefer this order:
 3. Add feedback. Make failures observable, attributable, and turned into tests or runbooks.
 4. Add safe stress. Use controlled experiments to expose hidden fragility before users do.
 5. Preserve optionality. Keep replaceable boundaries and reversible choices around uncertain areas.
+
+Name the mechanism of gain. A recommendation is stronger when it clearly creates faster learning, smaller blast radius, cheaper reversal, safer experimentation, dependency optionality, or incident-to-test conversion.
 
 Avoid treating "more redundancy" as automatically antifragile. Redundancy without feedback can be expensive robustness. Redundancy plus measured stress, ownership, and learning can become antifragile.
 

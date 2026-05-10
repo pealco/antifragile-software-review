@@ -211,6 +211,8 @@ The scanner helps find concrete evidence, but it should not set the agenda by it
 
 Every recommendation should say whether it is robust, resilient, or antifragile. Robust systems resist stress. Resilient systems recover from stress. Antifragile systems use bounded stress to learn, gain options, or reduce future downside.
 
+The skill now makes that distinction more concrete by tracing a high-exposure critical flow, classifying the stress response curve, scoring fragility exposure, and naming missing evidence instead of assuming it away.
+
 ### Antifragility Analysis Workflow
 
 A good review starts with a thesis and system map:
@@ -231,16 +233,28 @@ Then inspect the major design areas:
 - Testing and safe stress: fault injection, property tests, mutation tests, load tests, restore drills, and game days.
 - Security and abuse resistance: least privilege, auditability, dependency pinning, policy checks, rate limits, and abuse telemetry.
 
+For at least one high-exposure critical flow, trace:
+
+- trigger and entrypoint,
+- state or data mutation,
+- dependency calls,
+- failure handling,
+- observability and ownership,
+- rollback or degradation path,
+- missing evidence and the cheapest observation that would close the gap.
+
 The practical flow is:
 
 1. Clarify the system boundary, goals, and likely stressors.
 2. Inspect architecture, deployment paths, persistence, integrations, and feedback loops.
-3. Identify where the system has hidden downside, tight coupling, delayed feedback, or irreversible changes.
-4. Look for existing sources of optionality, redundancy, graceful degradation, and rapid learning.
-5. Recommend changes that increase learning and adaptation without adding unnecessary complexity.
-6. Separate quick code-level fixes from larger architectural or operational recommendations.
+3. Trace a critical flow and classify its stress response as capped, linear, superlinear, or convex.
+4. Identify where the system has hidden downside, tight coupling, delayed feedback, or irreversible changes.
+5. Score confirmed risks by blast radius, irreversibility, feedback delay, dependency concentration, and ruin potential.
+6. Look for existing sources of optionality, redundancy, graceful degradation, and rapid learning.
+7. Recommend changes that increase learning and adaptation without adding unnecessary complexity.
+8. Separate quick code-level fixes from larger architectural or operational recommendations.
 
-The scanner can support step 3, but should not replace the broader analysis.
+The scanner can support evidence gathering, but should not replace the broader analysis.
 
 ### Design Principles
 
@@ -253,7 +267,8 @@ The skill favors:
 - audit before mutation,
 - bounded downside through reversible changes, dry-runs, explicit skip reasons, and small patches,
 - feedback loops that make scanner failures, skipped files, and capped results visible,
-- antifragile deltas that create learning, optionality, or safe stress rather than durability alone.
+- antifragile deltas that create learning, optionality, or safe stress rather than durability alone,
+- abstraction only when uncertainty is real, the option is plausible, and the carrying cost is justified.
 
 ## Scanner Details
 
