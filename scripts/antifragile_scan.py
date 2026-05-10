@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import os
 import re
@@ -89,6 +90,26 @@ TEXT_FILENAMES = {
     "Rakefile",
 }
 
+CONFIG_FILENAMES = {
+    ".dockerignore",
+    ".env.example",
+    ".gitlab-ci.yml",
+    "Dockerfile",
+    "Makefile",
+    "Rakefile",
+    "package.json",
+    "pyproject.toml",
+    "requirements.txt",
+}
+
+CONFIG_SUFFIXES = {".cfg", ".conf", ".gradle", ".json", ".properties", ".tf", ".toml", ".yaml", ".yml"}
+DOC_SUFFIXES = {".adoc", ".md", ".rst", ".txt"}
+DOC_DIR_NAMES = {"doc", "docs", "reference", "references", "runbook", "runbooks"}
+TEST_DIR_NAMES = {"__tests__", "spec", "test", "tests"}
+
+INLINE_IGNORE_RE = re.compile(r"antifragile-scan:\s*ignore(?:\[([^\]]+)\])?", re.IGNORECASE)
+SOURCE_KINDS = ("code", "config", "docs", "tests")
+
 
 @dataclass(frozen=True)
 class Pattern:
@@ -97,12 +118,14 @@ class Pattern:
     concept: str
     regex: str
     why: str
+    source_kinds: tuple[str, ...] = ("code", "config")
 
 
 @dataclass
 class Finding:
     path: str
     line: int
+    source_kind: str
     pattern_id: str
     category: str
     concept: str
@@ -241,6 +264,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("repo", nargs="?", default=".", help="Repository path to scan")
     parser.add_argument("--json", action="store_true", help="Emit JSON instead of Markdown")
+    parser.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        help="Glob path to skip, relative to repo root. Repeat for multiple excludes.",
+    )
     parser.add_argument("--max-per-pattern", type=int, default=12, help="Maximum findings per pattern")
     parser.add_argument("--max-file-bytes", type=int, default=1_000_000, help="Skip files larger than this")
     return parser.parse_args()
@@ -252,33 +281,35 @@ def is_text_path(path: Path) -> bool:
 
 def iter_candidate_files(root: Path, max_file_bytes: int):
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [name for name in dirnames if name not in SKIP_DIRS]
-        for filename in filenames:
+        dirnames[:] = sorted(name for name in dirnames if name not in SKIP_DIRS)
+        for filename in sorted(filenames):
             path = Path(dirpath) / filename
             if not is_text_path(path):
                 continue
             try:
                 if path.stat().st_size > max_file_bytes:
+                    yield path, "too-large"
                     continue
             except OSError:
+                yield path, "stat-error"
                 continue
-            yield path
+            yield path, None
 
 
-def read_text(path: Path) -> str | None:
+def read_text(path: Path) -> tuple[str | None, str | None]:
     try:
         data = path.read_bytes()
     except OSError:
-        return None
+        return None, "read-error"
     if b"\0" in data:
-        return None
+        return None, "binary"
     try:
-        return data.decode("utf-8")
+        return data.decode("utf-8"), None
     except UnicodeDecodeError:
         try:
-            return data.decode("latin-1")
+            return data.decode("latin-1"), None
         except UnicodeDecodeError:
-            return None
+            return None, "decode-error"
 
 
 def rel_path(path: Path, root: Path) -> str:
@@ -288,26 +319,83 @@ def rel_path(path: Path, root: Path) -> str:
         return path.as_posix()
 
 
-def find_pattern_matches(root: Path, path: Path, text: str, max_per_pattern: int, pattern_counts: dict[str, int]):
+def classify_path(path: Path) -> str:
+    parts = {part.lower() for part in path.parts}
+    suffix = path.suffix.lower()
+    name = path.name
+    lower_name = name.lower()
+
+    if parts & TEST_DIR_NAMES or lower_name.startswith("test_") or lower_name.endswith(
+        ("_test.py", ".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx", "_test.go")
+    ):
+        return "tests"
+    if suffix in DOC_SUFFIXES or parts & DOC_DIR_NAMES:
+        return "docs"
+    if suffix in CONFIG_SUFFIXES or name in CONFIG_FILENAMES or ".github" in parts:
+        return "config"
+    return "code"
+
+
+def ignore_applies(line: str, pattern_id: str) -> bool:
+    match = INLINE_IGNORE_RE.search(line)
+    if not match:
+        return False
+    raw_ids = match.group(1)
+    if not raw_ids:
+        return True
+    ignored_ids = {item.strip() for item in re.split(r"[,\s]+", raw_ids) if item.strip()}
+    return pattern_id in ignored_ids
+
+
+def strip_inline_ignore(line: str) -> str:
+    return INLINE_IGNORE_RE.sub("", line)
+
+
+def skip_reason(root: Path, path: Path, exclude_globs: list[str], scanner_path: Path) -> str | None:
+    rel = rel_path(path, root)
+    if path.resolve() == scanner_path and root in scanner_path.parents:
+        return "self-scanner"
+    for pattern in exclude_globs:
+        if fnmatch.fnmatch(rel, pattern) or fnmatch.fnmatch(path.name, pattern):
+            return f"excluded:{pattern}"
+    return None
+
+
+def find_pattern_matches(
+    root: Path,
+    path: Path,
+    text: str,
+    max_per_pattern: int,
+    pattern_counts: dict[str, int],
+    omitted_counts: dict[str, int],
+):
     findings: list[Finding] = []
     compiled = [(pattern, re.compile(pattern.regex, re.IGNORECASE)) for pattern in PATTERNS]
+    source_kind = classify_path(path)
 
     for line_number, line in enumerate(text.splitlines(), start=1):
         stripped = line.strip()
         if not stripped:
             continue
+        search_line = strip_inline_ignore(line)
 
         for pattern, regex in compiled:
-            if pattern_counts.get(pattern.id, 0) >= max_per_pattern:
+            if source_kind not in pattern.source_kinds:
+                continue
+            if ignore_applies(line, pattern.id):
                 continue
             if pattern.id == "hardcoded-endpoint" and path.suffix.lower() in {".md", ".txt"}:
                 continue
-            if regex.search(line):
+            if regex.search(search_line):
+                if pattern_counts.get(pattern.id, 0) >= max_per_pattern:
+                    omitted_counts[pattern.id] = omitted_counts.get(pattern.id, 0) + 1
+                    continue
                 pattern_counts[pattern.id] = pattern_counts.get(pattern.id, 0) + 1
                 findings.append(
                     Finding(
                         path=rel_path(path, root),
                         line=line_number,
+                        source_kind=source_kind,
                         pattern_id=pattern.id,
                         category=pattern.category,
                         concept=pattern.concept,
@@ -316,9 +404,12 @@ def find_pattern_matches(root: Path, path: Path, text: str, max_per_pattern: int
                     )
                 )
 
-        custom = custom_line_findings(root, path, line_number, line)
+        custom = custom_line_findings(root, path, source_kind, line_number, line)
         for finding in custom:
+            if ignore_applies(line, finding.pattern_id):
+                continue
             if pattern_counts.get(finding.pattern_id, 0) >= max_per_pattern:
+                omitted_counts[finding.pattern_id] = omitted_counts.get(finding.pattern_id, 0) + 1
                 continue
             pattern_counts[finding.pattern_id] = pattern_counts.get(finding.pattern_id, 0) + 1
             findings.append(finding)
@@ -326,15 +417,19 @@ def find_pattern_matches(root: Path, path: Path, text: str, max_per_pattern: int
     return findings
 
 
-def custom_line_findings(root: Path, path: Path, line_number: int, line: str) -> list[Finding]:
+def custom_line_findings(root: Path, path: Path, source_kind: str, line_number: int, line: str) -> list[Finding]:
     findings: list[Finding] = []
     stripped = line.strip()
+
+    if source_kind not in {"code", "config"}:
+        return findings
 
     if re.search(r"\b(requests|httpx)\.(get|post|put|patch|delete)\s*\(", line) and "timeout=" not in line:
         findings.append(
             Finding(
                 path=rel_path(path, root),
                 line=line_number,
+                source_kind=source_kind,
                 pattern_id="python-http-without-timeout",
                 category="Cascade and ruin risk",
                 concept="bounded downside",
@@ -348,6 +443,7 @@ def custom_line_findings(root: Path, path: Path, line_number: int, line: str) ->
             Finding(
                 path=rel_path(path, root),
                 line=line_number,
+                source_kind=source_kind,
                 pattern_id="fetch-without-abort",
                 category="Cascade and ruin risk",
                 concept="bounded downside",
@@ -357,6 +453,37 @@ def custom_line_findings(root: Path, path: Path, line_number: int, line: str) ->
         )
 
     return findings
+
+
+def term_evidence(root: Path, texts: dict[Path, str]) -> tuple[dict[str, int], dict[str, dict[str, int]], dict[str, list[dict[str, object]]]]:
+    term_counts = dict.fromkeys(PRESENCE_TERMS, 0)
+    term_counts_by_source = {name: dict.fromkeys(SOURCE_KINDS, 0) for name in PRESENCE_TERMS}
+    term_locations: dict[str, list[dict[str, object]]] = {name: [] for name in PRESENCE_TERMS}
+
+    for path, text in texts.items():
+        source_kind = classify_path(path)
+        for line_number, line in enumerate(text.splitlines(), start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            for name, regex in PRESENCE_TERMS.items():
+                matches = list(regex.finditer(line))
+                if not matches:
+                    continue
+                count = len(matches)
+                term_counts[name] += count
+                term_counts_by_source[name][source_kind] += count
+                if len(term_locations[name]) < 8:
+                    term_locations[name].append(
+                        {
+                            "path": rel_path(path, root),
+                            "line": line_number,
+                            "source_kind": source_kind,
+                            "snippet": stripped[:180],
+                        }
+                    )
+
+    return term_counts, term_counts_by_source, term_locations
 
 
 def detect_project_signals(root: Path, files: list[Path], texts: dict[Path, str]) -> dict[str, object]:
@@ -382,11 +509,7 @@ def detect_project_signals(root: Path, files: list[Path], texts: dict[Path, str]
     ]
 
     migration_files = [rel for rel in rels if "migration" in rel or "/migrate/" in rel or "/migrations/" in rel]
-
-    term_counts = dict.fromkeys(PRESENCE_TERMS, 0)
-    for text in texts.values():
-        for name, regex in PRESENCE_TERMS.items():
-            term_counts[name] += len(regex.findall(text))
+    term_counts, term_counts_by_source, term_locations = term_evidence(root, texts)
 
     return {
         "files_scanned": len(files),
@@ -396,6 +519,8 @@ def detect_project_signals(root: Path, files: list[Path], texts: dict[Path, str]
         "ci_files": ci_files[:10],
         "migration_file_count": len(migration_files),
         "term_counts": term_counts,
+        "term_counts_by_source": term_counts_by_source,
+        "term_locations": term_locations,
         "path_hints": {
             "docs": "docs/" in joined_paths or "/docs/" in joined_paths,
             "infrastructure": any(part in joined_paths for part in ["terraform", ".tf", "helm", "k8s", "kubernetes"]),
@@ -410,6 +535,37 @@ def large_file_signals(root: Path, texts: dict[Path, str]) -> list[dict[str, obj
         if line_count >= 800:
             signals.append({"path": rel_path(path, root), "lines": line_count})
     return sorted(signals, key=lambda item: item["lines"], reverse=True)[:20]
+
+
+def combined_term_counts(signals: dict[str, object], *names: str) -> tuple[int, dict[str, int]]:
+    term_counts = signals["term_counts"]
+    term_counts_by_source = signals["term_counts_by_source"]
+    total = sum(term_counts[name] for name in names)
+    by_source = {source_kind: 0 for source_kind in SOURCE_KINDS}
+    for name in names:
+        for source_kind in SOURCE_KINDS:
+            by_source[source_kind] += term_counts_by_source[name][source_kind]
+    return total, by_source
+
+
+def format_source_counts(counts: dict[str, int]) -> str:
+    return ", ".join(f"{source_kind}: {counts[source_kind]}" for source_kind in SOURCE_KINDS)
+
+
+def sample_term_locations(signals: dict[str, object], *names: str, max_items: int = 3) -> list[dict[str, object]]:
+    locations = []
+    seen = set()
+    term_locations = signals["term_locations"]
+    for name in names:
+        for location in term_locations[name]:
+            key = (location["path"], location["line"], location["source_kind"])
+            if key in seen:
+                continue
+            seen.add(key)
+            locations.append(location)
+            if len(locations) >= max_items:
+                return locations
+    return locations
 
 
 def markdown_report(result: dict[str, object]) -> str:
@@ -430,20 +586,54 @@ def markdown_report(result: dict[str, object]) -> str:
     ]
 
     signals = result["project_signals"]
-    term_counts = signals["term_counts"]
+    rollback_total, rollback_by_source = combined_term_counts(signals, "rollback", "dry-run")
+    rollout_total, rollout_by_source = combined_term_counts(signals, "feature-flags", "canary")
+    chaos_total, chaos_by_source = combined_term_counts(signals, "chaos")
+    observability_total, observability_by_source = combined_term_counts(signals, "observability")
+    incident_total, incident_by_source = combined_term_counts(signals, "incident-learning")
     lines.extend(
         [
             f"- Tests present: {'yes' if signals['tests_present'] else 'not detected'} ({signals['test_file_count']} files)",
             f"- CI present: {'yes' if signals['ci_present'] else 'not detected'}",
             f"- Migration files detected: {signals['migration_file_count']}",
-            f"- Rollback/dry-run mentions: {term_counts['rollback'] + term_counts['dry-run']}",
-            f"- Feature flag/canary mentions: {term_counts['feature-flags'] + term_counts['canary']}",
-            f"- Chaos/fault experiment mentions: {term_counts['chaos']}",
-            f"- Observability/SLO mentions: {term_counts['observability']}",
-            f"- Runbook/postmortem mentions: {term_counts['incident-learning']}",
+            f"- Rollback/dry-run mentions: {rollback_total} ({format_source_counts(rollback_by_source)})",
+            f"- Feature flag/canary mentions: {rollout_total} ({format_source_counts(rollout_by_source)})",
+            f"- Chaos/fault experiment mentions: {chaos_total} ({format_source_counts(chaos_by_source)})",
+            f"- Observability/SLO mentions: {observability_total} ({format_source_counts(observability_by_source)})",
+            f"- Runbook/postmortem mentions: {incident_total} ({format_source_counts(incident_by_source)})",
+            f"- Skipped files: {len(result['skipped_files'])}",
+            "",
+            "Operational mentions are evidence locations, not proof that a capability works.",
             "",
         ]
     )
+
+    location_groups = [
+        ("Rollback/dry-run", ("rollback", "dry-run")),
+        ("Feature flag/canary", ("feature-flags", "canary")),
+        ("Chaos/fault experiment", ("chaos",)),
+        ("Observability/SLO", ("observability",)),
+        ("Runbook/postmortem", ("incident-learning",)),
+    ]
+    sampled = [(label, sample_term_locations(signals, *names)) for label, names in location_groups]
+    sampled = [(label, locations) for label, locations in sampled if locations]
+    skipped_files = result["skipped_files"]
+    if skipped_files:
+        lines.extend(["### Skipped File Samples", ""])
+        for item in skipped_files[:8]:
+            lines.append(f"- `{item['path']}`: {item['reason']}")
+        if len(skipped_files) > 8:
+            lines.append(f"- ... {len(skipped_files) - 8} more skipped files")
+        lines.append("")
+
+    if sampled:
+        lines.extend(["### Mention Location Samples", ""])
+        for label, locations in sampled:
+            rendered = ", ".join(
+                f"`{location['path']}:{location['line']}` [{location['source_kind']}]" for location in locations
+            )
+            lines.append(f"- {label}: {rendered}")
+        lines.append("")
 
     large_files = result["large_files"]
     if large_files:
@@ -458,12 +648,19 @@ def markdown_report(result: dict[str, object]) -> str:
             lines.extend([f"### {category}", ""])
             for item in items:
                 lines.append(
-                    f"- `{item.path}:{item.line}` [{item.pattern_id}; {item.concept}] {item.snippet}"
+                    f"- `{item.path}:{item.line}` [{item.source_kind}; {item.pattern_id}; {item.concept}] {item.snippet}"
                 )
                 lines.append(f"  - Why it matters: {item.why}")
             lines.append("")
     else:
         lines.extend(["## Heuristic Findings", "", "No pattern findings detected.", ""])
+
+    finding_overflow = result["finding_overflow"]
+    if finding_overflow:
+        lines.extend(["## Capped Finding Overflow", ""])
+        for pattern_id, count in sorted(finding_overflow.items()):
+            lines.append(f"- `{pattern_id}`: {count} additional matches omitted by `--max-per-pattern`")
+        lines.append("")
 
     lines.extend(
         [
@@ -488,20 +685,32 @@ def main() -> int:
     texts: dict[Path, str] = {}
     findings: list[Finding] = []
     pattern_counts: dict[str, int] = {}
+    omitted_counts: dict[str, int] = {}
+    skipped_files: list[dict[str, str]] = []
+    scanner_path = Path(__file__).resolve()
 
-    for path in iter_candidate_files(root, args.max_file_bytes):
-        text = read_text(path)
+    for path, candidate_skip_reason in iter_candidate_files(root, args.max_file_bytes):
+        reason = skip_reason(root, path, args.exclude, scanner_path)
+        if reason is None:
+            reason = candidate_skip_reason
+        if reason:
+            skipped_files.append({"path": rel_path(path, root), "reason": reason})
+            continue
+        text, read_skip_reason = read_text(path)
         if text is None:
+            skipped_files.append({"path": rel_path(path, root), "reason": read_skip_reason or "read-error"})
             continue
         files.append(path)
         texts[path] = text
-        findings.extend(find_pattern_matches(root, path, text, args.max_per_pattern, pattern_counts))
+        findings.extend(find_pattern_matches(root, path, text, args.max_per_pattern, pattern_counts, omitted_counts))
 
     result = {
         "root": root.as_posix(),
         "project_signals": detect_project_signals(root, files, texts),
         "large_files": large_file_signals(root, texts),
         "findings": [asdict(finding) for finding in findings],
+        "finding_overflow": dict(sorted(omitted_counts.items())),
+        "skipped_files": skipped_files,
     }
 
     if args.json:

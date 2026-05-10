@@ -1,4 +1,4 @@
 interface:
   display_name: "Antifragile Software Review"
-  short_description: "Find antifragility gaps in codebases"
-  default_prompt: "Use $antifragile-software-review to inspect this codebase for fragile design choices and propose antifragile improvements."
+  short_description: "Find antifragility gaps and reversible fixes"
+  default_prompt: "Use $antifragile-software-review to inspect this codebase for fragile design choices. If the user asks to review, inspect, assess, or propose improvements, stay in audit mode and return findings plus a backlog without changing files. If the user explicitly asks to make, fix, address, harden, or improve the repo, switch to implementation mode and patch the highest-leverage reversible improvement with validation."
