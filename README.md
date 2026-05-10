@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/pealco/antifragile-software-review/actions/workflows/test.yml/badge.svg)](https://github.com/pealco/antifragile-software-review/actions/workflows/test.yml)
 
-A Codex skill, architectural review playbook, and lightweight scanner for reviewing software through Nassim Taleb's antifragility lens.
+A Codex and Claude Code skill, architectural review playbook, and lightweight scanner for reviewing software through Nassim Taleb's antifragility lens.
 
 The goal is not to label a codebase as "good" or "bad." The goal is to find places where volatility, dependency failure, growth, incidents, irreversible actions, or changing requirements can create outsized harm, then turn those stressors into feedback, optionality, safer experiments, or smaller blast radii.
 
@@ -16,6 +16,38 @@ This repository contains four useful pieces:
 - `scripts/antifragile_scan.py`: a dependency-free Python scanner that surfaces review leads across Python, Rust, SQL, TypeScript, JavaScript, Go, JVM, Ruby, shell, and infrastructure files.
 
 The scanner is intentionally secondary. It produces leads for a reviewer to confirm in context, not final judgments. The main value of the skill is the broader analysis of architectural decisions, operating patterns, blast radius, reversibility, optionality, and feedback loops.
+
+## Claude Code Compatibility
+
+This repository is also a Claude Code skill. Claude Code discovers skills from `~/.claude/skills/<skill-name>/SKILL.md`, project-local `.claude/skills/<skill-name>/SKILL.md`, and plugin skill directories. The repository root contains the required `SKILL.md`, so it can be installed directly as a personal or project skill.
+
+Install as a personal Claude Code skill:
+
+```bash
+mkdir -p ~/.claude/skills
+git clone https://github.com/pealco/antifragile-software-review.git ~/.claude/skills/antifragile-software-review
+```
+
+Use it in Claude Code either by natural language:
+
+```text
+Use the antifragile software review skill to audit this repo.
+```
+
+or direct invocation:
+
+```text
+/antifragile-software-review .
+```
+
+For a project-scoped install that can be shared with a team, add it under that repository's `.claude/skills/` directory:
+
+```bash
+mkdir -p .claude/skills
+git submodule add https://github.com/pealco/antifragile-software-review.git .claude/skills/antifragile-software-review
+```
+
+Claude Code provides `${CLAUDE_SKILL_DIR}` to skills at runtime. The skill uses that path when it instructs Claude to run the bundled scanner, so the scanner works whether the skill is installed personally, in a project, or through a plugin.
 
 ## Review Philosophy
 

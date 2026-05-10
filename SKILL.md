@@ -1,6 +1,8 @@
 ---
 name: antifragile-software-review
-description: Review and improve software repositories through Nassim Taleb's antifragility lens. Use when asked to make a codebase antifragile, apply Antifragile or Taleb concepts to software design, find or fix fragility risks, improve resilience beyond robustness, or inspect architecture, reliability, observability, deployment, testing, rollback, incident-learning, coupling, optionality, or failure-handling tradeoffs.
+description: Review and improve software repositories through Nassim Taleb's antifragility lens.
+when_to_use: Use when asked to make a codebase antifragile, apply Antifragile or Taleb concepts to software design, find or fix fragility risks, improve resilience beyond robustness, or inspect architecture, reliability, observability, deployment, testing, rollback, incident-learning, coupling, optionality, or failure-handling tradeoffs.
+argument-hint: "[repo-path or focus]"
 ---
 
 # Antifragile Software Review
@@ -10,6 +12,10 @@ description: Review and improve software repositories through Nassim Taleb's ant
 Inspect the codebase for architectural and operational design choices that are harmed by volatility, uncertainty, stress, errors, growth, incidents, or changing requirements. Produce concrete findings and changes that help the system gain information, options, or safety from small failures instead of merely surviving them.
 
 Load `references/review-playbook.md` for the review method. Load `references/antifragility-primer.md` when you need the conceptual mapping from Taleb's ideas to software design. When changing this skill, use `references/evaluation-scenarios.md` as the behavior checklist.
+
+Claude Code compatibility:
+- The skill can be invoked directly as `/antifragile-software-review [repo-path or focus]`; treat any provided arguments as the target repository, review scope, or implementation focus.
+- In Claude Code, `${CLAUDE_SKILL_DIR}` resolves to this skill directory. In other environments, use the absolute path to this skill directory.
 
 ## Workflow
 
@@ -38,17 +44,19 @@ Load `references/review-playbook.md` for the review method. Load `references/ant
 5. Run the heuristic scanner for supporting leads:
 
 ```bash
-python3 /path/to/antifragile-software-review/scripts/antifragile_scan.py /path/to/repo
+python3 "${CLAUDE_SKILL_DIR}/scripts/antifragile_scan.py" /path/to/repo
 ```
 
 Use scanner output as a lead list only, subordinate to the architectural analysis. Confirm important claims by reading the relevant code, tests, docs, and deployment configuration. Treat operational term counts as mention locations, not proof that rollback, canary, observability, or incident-learning capabilities actually work.
+
+If `${CLAUDE_SKILL_DIR}` is unavailable, replace it with the absolute path to this skill directory.
 
 The scanner is language-aware but intentionally heuristic. It includes generic leads plus first-pass Python, Rust, SQL, TypeScript, JavaScript, Go, Java, Kotlin, Ruby, shell, Terraform, Kubernetes YAML, and GitHub Actions signals. Prefer ecosystem linters and infrastructure policy tools for precise validation; use scanner `linter_overlaps` as a hint that the same code shape may already be covered by Ruff, Clippy, ESLint, TypeScript ESLint, RuboCop, ShellCheck, actionlint, tfsec, Checkov, or another language-specific tool.
 
 Useful scanner controls:
 
 ```bash
-python3 /path/to/antifragile-software-review/scripts/antifragile_scan.py /path/to/repo --exclude 'fixtures/**'
+python3 "${CLAUDE_SKILL_DIR}/scripts/antifragile_scan.py" /path/to/repo --exclude 'fixtures/**'
 ```
 
 Add `antifragile-scan: ignore` or `antifragile-scan: ignore[pattern-id]` on a line only when the signal is intentionally reviewed and harmless.
