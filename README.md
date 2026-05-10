@@ -2,18 +2,53 @@
 
 [![Tests](https://github.com/pealco/antifragile-software-review/actions/workflows/test.yml/badge.svg)](https://github.com/pealco/antifragile-software-review/actions/workflows/test.yml)
 
-A Codex skill and lightweight scanner for reviewing software through Nassim Taleb's antifragility lens.
+A Codex skill, architectural review playbook, and lightweight scanner for reviewing software through Nassim Taleb's antifragility lens.
 
 The goal is not to label a codebase as "good" or "bad." The goal is to find places where volatility, dependency failure, growth, incidents, irreversible actions, or changing requirements can create outsized harm, then turn those stressors into feedback, optionality, safer experiments, or smaller blast radii.
 
 ## What It Does
 
-This repository contains two useful pieces:
+This repository contains three useful pieces:
 
 - `SKILL.md`: a Codex skill for auditing or improving a repository with an antifragility-focused review workflow.
+- `references/review-playbook.md`: a system-level review method for architecture, operations, release, data, dependency, testing, and incident-learning analysis.
 - `scripts/antifragile_scan.py`: a dependency-free Python scanner that surfaces review leads across Python, Rust, SQL, TypeScript, JavaScript, Go, JVM, Ruby, shell, and infrastructure files.
 
-The scanner is intentionally heuristic. It produces leads for a reviewer to confirm in context, not final judgments.
+The scanner is intentionally secondary. It produces leads for a reviewer to confirm in context, not final judgments. The main value of the skill is the broader analysis of architectural decisions, operating patterns, blast radius, reversibility, optionality, and feedback loops.
+
+## Review Philosophy
+
+Antifragility review is broader than code linting. The skill asks how the system responds when reality gets noisy:
+
+- Which critical flows fail nonlinearly under load, dependency failure, bad deploys, malformed input, or changing requirements?
+- Which decisions are hard to reverse after they meet production data, users, vendors, or infrastructure?
+- Which failures create durable learning through tests, metrics, runbooks, ownership, or safer defaults?
+- Where can small controlled stressors make the system better before real incidents do?
+- Where is optionality valuable enough to justify an abstraction, adapter, feature flag, dry-run, or staged rollout?
+
+The scanner helps find concrete evidence, but it should not set the agenda by itself. A scanner hit outside a critical path is usually less important than an architectural single point of failure, irreversible migration path, unowned alert, or release process with no safe rollback.
+
+## Antifragility Analysis Workflow
+
+A good review starts with a thesis and system map:
+
+- System shape: what the system does, the main runtime pieces, and the critical user or business flows.
+- Primary stressors: dependency failure, load spikes, bad input, schema change, vendor drift, incidents, cost pressure, or requirement churn.
+- Fragility hypothesis: where those stressors can create outsized harm.
+- Antifragile opportunity: where small failures could create learning, optionality, safer experiments, or smaller future downside.
+- Evidence confidence: which claims are direct code/config evidence, which are docs-only, and which remain unknown.
+
+Then inspect the major design areas:
+
+- Architecture and coupling: boundaries, shared state, local failure containment, and replacement cost.
+- Data and migrations: irreversible writes, staged migrations, replayability, backups, and invariants.
+- Release and deployment: canaries, feature flags, rollback verification, workflow concurrency, artifact pinning, and deploy observability.
+- Dependencies and vendors: timeouts, budgets, circuit breakers, cached degradation, contract tests, and vendor-exit optionality.
+- Observability and incident learning: SLOs, dashboards, alerts with owners, runbooks, incident reviews, and regression tests from incidents.
+- Testing and safe stress: fault injection, property tests, mutation tests, load tests, restore drills, and game days.
+- Security and abuse resistance: least privilege, auditability, dependency pinning, policy checks, rate limits, and abuse telemetry.
+
+Every recommendation should say whether it is robust, resilient, or antifragile. Robust systems resist stress. Resilient systems recover from stress. Antifragile systems use bounded stress to learn, gain options, or reduce future downside.
 
 ## Install For Codex
 
@@ -63,7 +98,7 @@ rm -rf ~/.codex/skills/antifragile-software-review
 
 ## Use The Scanner Directly
 
-You can run the scanner without installing the Codex skill. It only needs Python 3.10 or newer.
+You can run the scanner without installing the Codex skill. It only needs Python 3.10 or newer. Use it as a discovery tool after you have a rough system map, or as a quick source of review leads when you are exploring unfamiliar code.
 
 ```bash
 python3 scripts/antifragile_scan.py /path/to/repo
@@ -99,6 +134,8 @@ The Markdown report includes:
 - Capped finding overflow: additional matches omitted by `--max-per-pattern`.
 - Next review moves: suggested follow-up steps for a human or agent reviewer.
 
+These outputs are inputs to architectural review. They are not a replacement for reading the relevant flow, deploy mechanism, data path, or operational docs.
+
 JSON output includes the same core data in machine-readable form:
 
 ```json
@@ -119,7 +156,7 @@ JSON output includes the same core data in machine-readable form:
 
 ## What It Looks For
 
-The scanner currently looks for leads in these areas:
+The scanner currently looks for code and configuration leads in these areas:
 
 - Silent failure and lost learning: bare `except`, swallowed exceptions, empty catches, ignored errors.
 - Prediction and timing dependence: fixed sleeps, magic timeout constants, impossible assumptions.
@@ -162,6 +199,8 @@ Some scanner rules intentionally overlap with tools such as [Ruff](https://docs.
 
 When a finding overlaps known linter behavior, JSON and Markdown output include `linter_overlaps`. That metadata is meant to make overlap explicit, not to make the scanner authoritative. Prefer ecosystem linters for precise linting, and use this scanner for cross-language leads, operational signals, and antifragility review prompts.
 
+Scanner-only leads should usually be treated as prompts for code reading. They become high-priority findings only when confirmed on an important flow or tied to a meaningful blast radius.
+
 ## Suppress Reviewed Signals
 
 Use inline suppression only after reviewing the signal and deciding it is harmless in context.
@@ -187,6 +226,7 @@ while True:  # antifragile-scan: ignore
 |-- SKILL.md                         # Codex skill instructions
 |-- agents/openai.yaml               # Codex app metadata and default prompt
 |-- references/antifragility-primer.md
+|-- references/review-playbook.md    # System-level antifragility review method
 |-- scripts/antifragile_scan.py      # Standalone scanner
 |-- tests/test_antifragile_scan.py   # Scanner regression tests
 `-- .github/workflows/test.yml       # CI
@@ -219,6 +259,7 @@ The self-scan intentionally skips `scripts/antifragile_scan.py` as `self-scanner
 - Evidence before advice: findings should cite real files and line numbers.
 - Leads, not verdicts: heuristic matches need code-reading confirmation.
 - Complement linters, do not clone them: overlaps should be explicit and justified by scanner value.
+- Architecture before scanner output: form a system-level fragility thesis before ranking pattern matches.
 - Audit before mutation: review-style prompts should not edit repositories.
 - Bounded downside: prefer reversible changes, dry-runs, explicit skip reasons, and small patches.
 - Feedback loops: scanner failures, skipped files, and capped results should be visible.
