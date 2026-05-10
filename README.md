@@ -2,54 +2,202 @@
 
 [![Tests](https://github.com/pealco/antifragile-software-review/actions/workflows/test.yml/badge.svg)](https://github.com/pealco/antifragile-software-review/actions/workflows/test.yml)
 
-A Codex and Claude Code skill, architectural review playbook, and lightweight scanner for reviewing software through Nassim Taleb's antifragility lens.
+A Codex and Claude Code skill for reviewing software through an antifragility lens: finding places where systems merely resist stress, and improving them so they learn from variation, failures, and changing constraints.
 
-The goal is not to label a codebase as "good" or "bad." The goal is to find places where volatility, dependency failure, growth, incidents, irreversible actions, or changing requirements can create outsized harm, then turn those stressors into feedback, optionality, safer experiments, or smaller blast radii.
+The goal is not to make code "perfect" or eliminate all failure. The goal is to help a codebase gain from small shocks, cheap experiments, fast reversals, rich feedback, and bounded downside.
 
-## What It Does
+## What It Includes
 
-This repository contains four useful pieces:
+This repository contains:
 
-- `SKILL.md`: a Codex skill for auditing or improving a repository with an antifragility-focused review workflow.
-- `references/review-playbook.md`: a system-level review method for architecture, operations, release, data, dependency, testing, and incident-learning analysis.
+- `SKILL.md`: the skill entrypoint for Codex and Claude Code.
+- `references/review-playbook.md`: the system-level review method for architecture, operations, release, data, dependency, testing, and incident-learning analysis.
 - `references/evaluation-scenarios.md`: representative behavior checks for keeping the skill architecture-first, evidence-driven, and resistant to scanner overfitting.
-- `scripts/antifragile_scan.py`: a dependency-free Python scanner that surfaces review leads across Python, Rust, SQL, TypeScript, JavaScript, Go, JVM, Ruby, shell, and infrastructure files.
+- `scripts/antifragile_scan.py`: a dependency-free Python scanner that surfaces review leads across several languages, runtimes, and infrastructure files.
 
-The scanner is intentionally secondary. It produces leads for a reviewer to confirm in context, not final judgments. The main value of the skill is the broader analysis of architectural decisions, operating patterns, blast radius, reversibility, optionality, and feedback loops.
+The scanner is deliberately secondary. It helps discover concrete code smells and review leads, but the skill's main value is broader architectural, operational, and design analysis.
 
-## Claude Code Compatibility
+## Install
 
-This repository is also a Claude Code skill. Claude Code discovers skills from `~/.claude/skills/<skill-name>/SKILL.md`, project-local `.claude/skills/<skill-name>/SKILL.md`, and plugin skill directories. The repository root contains the required `SKILL.md`, so it can be installed directly as a personal or project skill.
+### Claude Code
+
+Claude Code discovers skills from `~/.claude/skills` for personal skills and `.claude/skills` for project-local skills. This repository can be installed either way.
 
 Install as a personal Claude Code skill:
 
 ```bash
 mkdir -p ~/.claude/skills
-git clone https://github.com/pealco/antifragile-software-review.git ~/.claude/skills/antifragile-software-review
+git clone https://github.com/pealco/antifragile-software-review.git \
+  ~/.claude/skills/antifragile-software-review
 ```
 
-Use it in Claude Code either by natural language:
+Restart Claude Code after installation so the skill index refreshes.
+
+Use it naturally:
 
 ```text
-Use the antifragile software review skill to audit this repo.
+Review this repository through an antifragility lens.
+Find fragility risks in this design and suggest improvements.
+Use antifragile-software-review to audit this service.
 ```
 
-or direct invocation:
+Or invoke it explicitly:
 
 ```text
-/antifragile-software-review .
+Use the antifragile-software-review skill to review this codebase.
 ```
 
-For a project-scoped install that can be shared with a team, add it under that repository's `.claude/skills/` directory:
+Install it as a project-scoped Claude Code skill when you want the review workflow versioned with a repository:
 
 ```bash
 mkdir -p .claude/skills
-git submodule add https://github.com/pealco/antifragile-software-review.git .claude/skills/antifragile-software-review
+git submodule add https://github.com/pealco/antifragile-software-review.git \
+  .claude/skills/antifragile-software-review
 ```
 
-Claude Code provides `${CLAUDE_SKILL_DIR}` to skills at runtime. The skill uses that path when it instructs Claude to run the bundled scanner, so the scanner works whether the skill is installed personally, in a project, or through a plugin.
+Claude Code exposes the skill directory through `${CLAUDE_SKILL_DIR}`, so scanner examples in `SKILL.md` work without hard-coded absolute paths.
 
-## Review Philosophy
+Update the Claude Code skill:
+
+```bash
+git -C ~/.claude/skills/antifragile-software-review pull --ff-only
+```
+
+Uninstall the personal Claude Code skill:
+
+```bash
+rm -rf ~/.claude/skills/antifragile-software-review
+```
+
+### Codex
+
+Requirements:
+
+- Codex CLI with local skill support.
+- Python 3.10 or newer if you want to run the scanner directly.
+- Git for installing and updating from GitHub.
+
+Install as a Codex skill:
+
+```bash
+mkdir -p ~/.codex/skills
+git clone https://github.com/pealco/antifragile-software-review.git \
+  ~/.codex/skills/antifragile-software-review
+```
+
+Restart Codex after installing so the skill registry reloads.
+
+Use it naturally:
+
+```text
+Review this repository through an antifragility lens.
+Find fragility risks in this design and suggest improvements.
+Use antifragile-software-review to audit this service.
+```
+
+Or invoke it explicitly:
+
+```text
+[$antifragile-software-review] Review this repo for fragility risks.
+```
+
+Update the Codex skill:
+
+```bash
+git -C ~/.codex/skills/antifragile-software-review pull --ff-only
+```
+
+Uninstall the Codex skill:
+
+```bash
+rm -rf ~/.codex/skills/antifragile-software-review
+```
+
+## Use
+
+### Review With The Skill
+
+When asked for an audit, the skill should diagnose fragility risks and explain why they matter. When asked to address issues, it should turn recommendations into implementation work.
+
+Good review prompts include:
+
+```text
+Audit this repo for antifragility risks.
+Review this architecture for optionality, reversibility, and failure learning.
+Find places where this system is merely robust instead of antifragile.
+Address the antifragility issues you identify.
+```
+
+The review should focus on:
+
+- architectural decisions and coupling,
+- operational feedback loops,
+- failure handling and rollback,
+- observability and incident learning,
+- deployment and change-management practices,
+- tests and scenario coverage,
+- optionality, reversibility, and bounded downside.
+
+The skill distinguishes between audit wording and implementation wording:
+
+- Audit mode: review, inspect, assess, or tell me what to improve.
+- Implementation mode: make, fix, address, harden, or improve.
+
+### Run The Scanner Directly
+
+The scanner can be run as a standalone Python script. Use it as a discovery tool after you have a rough system map, or as a quick source of review leads when you are exploring unfamiliar code.
+
+```bash
+python3 scripts/antifragile_scan.py .
+```
+
+Emit JSON for automation:
+
+```bash
+python3 scripts/antifragile_scan.py . --json
+```
+
+Scan specific paths:
+
+```bash
+python3 scripts/antifragile_scan.py src tests config
+```
+
+Exclude paths:
+
+```bash
+python3 scripts/antifragile_scan.py . --exclude vendor --exclude build
+```
+
+Limit findings per rule:
+
+```bash
+python3 scripts/antifragile_scan.py . --max-per-pattern 20 --max-file-bytes 2000000
+```
+
+### Suppress Reviewed Signals
+
+Use inline suppression only after reviewing the signal and deciding it is harmless in context.
+
+Ignore one pattern:
+
+```python
+except ExpectedError:
+    pass  # antifragile-scan: ignore[silent-exception]
+```
+
+Ignore all scanner patterns on a line:
+
+```python
+while True:  # antifragile-scan: ignore
+    poll_once()
+```
+
+Use suppressions sparingly. They are intended for explicit tradeoffs, not for hiding uncomfortable feedback.
+
+## Review Method
+
+### Review Philosophy
 
 Antifragility review is broader than code linting. The skill asks how the system responds when reality gets noisy:
 
@@ -61,7 +209,9 @@ Antifragility review is broader than code linting. The skill asks how the system
 
 The scanner helps find concrete evidence, but it should not set the agenda by itself. A scanner hit outside a critical path is usually less important than an architectural single point of failure, irreversible migration path, unowned alert, or release process with no safe rollback.
 
-## Antifragility Analysis Workflow
+Every recommendation should say whether it is robust, resilient, or antifragile. Robust systems resist stress. Resilient systems recover from stress. Antifragile systems use bounded stress to learn, gain options, or reduce future downside.
+
+### Antifragility Analysis Workflow
 
 A good review starts with a thesis and system map:
 
@@ -81,123 +231,58 @@ Then inspect the major design areas:
 - Testing and safe stress: fault injection, property tests, mutation tests, load tests, restore drills, and game days.
 - Security and abuse resistance: least privilege, auditability, dependency pinning, policy checks, rate limits, and abuse telemetry.
 
-Every recommendation should say whether it is robust, resilient, or antifragile. Robust systems resist stress. Resilient systems recover from stress. Antifragile systems use bounded stress to learn, gain options, or reduce future downside.
+The practical flow is:
 
-## Skill And Agent Design
+1. Clarify the system boundary, goals, and likely stressors.
+2. Inspect architecture, deployment paths, persistence, integrations, and feedback loops.
+3. Identify where the system has hidden downside, tight coupling, delayed feedback, or irreversible changes.
+4. Look for existing sources of optionality, redundancy, graceful degradation, and rapid learning.
+5. Recommend changes that increase learning and adaptation without adding unnecessary complexity.
+6. Separate quick code-level fixes from larger architectural or operational recommendations.
 
-The skill is designed around a few practical agent principles:
+The scanner can support step 3, but should not replace the broader analysis.
 
-- Progressive disclosure: `SKILL.md` stays as the core workflow, while detailed review method and eval scenarios live in `references/`.
-- Simple defaults: one clear review pass, an architecture-first thesis, and scanner output as supporting evidence.
-- Concrete success criteria: evaluation scenarios describe how a fresh agent should behave in audit mode, implementation mode, scanner-heavy repos, prompt-injection fixtures, and large monorepos.
-- Untrusted inputs: repository text, comments, generated files, issues, and scanner snippets are treated as evidence, not as instructions.
-- Evidence over checklists: findings need code, config, docs, or operational artifacts, plus a clear blast radius and validation path.
+### Design Principles
 
-## Install For Codex
+The skill favors:
 
-Requirements:
+- evidence before advice: findings should cite real files and line numbers,
+- leads, not verdicts: heuristic matches need code-reading confirmation,
+- complementing linters instead of cloning them,
+- architecture before scanner output,
+- audit before mutation,
+- bounded downside through reversible changes, dry-runs, explicit skip reasons, and small patches,
+- feedback loops that make scanner failures, skipped files, and capped results visible,
+- antifragile deltas that create learning, optionality, or safe stress rather than durability alone.
 
-- Codex with local skill support.
-- Git.
-- Python 3.10 or newer if you want to run the scanner directly.
+## Scanner Details
 
-Clone this repository into your Codex skills directory:
-
-```bash
-mkdir -p ~/.codex/skills
-git clone https://github.com/pealco/antifragile-software-review.git ~/.codex/skills/antifragile-software-review
-```
-
-Restart Codex or start a new session so the skill list refreshes.
-
-Then ask Codex to use the skill:
-
-```text
-Use $antifragile-software-review to audit this repo.
-```
-
-For implementation mode, be explicit:
-
-```text
-Use $antifragile-software-review to address the highest-risk reversible issue in this repo.
-```
-
-The skill distinguishes between audit wording and implementation wording:
-
-- Audit mode: review, inspect, assess, or tell me what to improve.
-- Implementation mode: make, fix, address, harden, or improve.
-
-Update the installed skill:
-
-```bash
-git -C ~/.codex/skills/antifragile-software-review pull --ff-only
-```
-
-Uninstall it:
-
-```bash
-rm -rf ~/.codex/skills/antifragile-software-review
-```
-
-## Use The Scanner Directly
-
-You can run the scanner without installing the Codex skill. It only needs Python 3.10 or newer. Use it as a discovery tool after you have a rough system map, or as a quick source of review leads when you are exploring unfamiliar code.
-
-```bash
-python3 scripts/antifragile_scan.py /path/to/repo
-```
-
-Emit JSON for scripts or CI experiments:
-
-```bash
-python3 scripts/antifragile_scan.py /path/to/repo --json
-```
-
-Exclude noisy paths:
-
-```bash
-python3 scripts/antifragile_scan.py /path/to/repo --exclude 'fixtures/**' --exclude 'snapshots/**'
-```
-
-Control output volume:
-
-```bash
-python3 scripts/antifragile_scan.py /path/to/repo --max-per-pattern 25 --max-file-bytes 2000000
-```
-
-## Scanner Output
+### Scanner Output
 
 The Markdown report includes:
 
-- Project signals: tests, CI, migration hints, and operational term counts by source type.
-- Language counts: scanned file counts by detected language or file family.
-- Mention locations: sample locations for rollback, canary, observability, incident-learning, and fault-experiment terms.
-- Skipped file samples: files skipped due to size, binary content, read errors, explicit excludes, or self-scan rules.
-- Heuristic findings: pattern matches grouped by fragility category.
-- Capped finding overflow: additional matches omitted by `--max-per-pattern`.
-- Next review moves: suggested follow-up steps for a human or agent reviewer.
+- project signals: tests, CI, migration hints, and operational term counts by source type,
+- language counts by detected language or file family,
+- mention locations for rollback, canary, observability, incident-learning, and fault-experiment terms,
+- skipped file samples caused by size, binary content, read errors, explicit excludes, or self-scan rules,
+- heuristic findings grouped by fragility category,
+- capped finding overflow for additional matches omitted by `--max-per-pattern`,
+- next review moves for a human or agent reviewer.
 
 These outputs are inputs to architectural review. They are not a replacement for reading the relevant flow, deploy mechanism, data path, or operational docs.
 
-JSON output includes the same core data in machine-readable form:
+JSON output includes:
 
-```json
-{
-  "project_signals": {},
-  "findings": [
-    {
-      "pattern_id": "python-http-without-timeout",
-      "language": "python",
-      "linter_overlaps": ["ruff:S113"],
-      "scanner_value": "Keeps timeout risk in the antifragility report beside non-Python cancellation and cascade signals."
-    }
-  ],
-  "finding_overflow": {},
-  "skipped_files": []
-}
-```
+- `root`
+- `project_signals`
+- `large_files`
+- `findings`
+- `finding_overflow`
+- `skipped_files`
 
-## What It Looks For
+Individual findings include `pattern_id`, `language`, `source_kind`, `category`, `concept`, `path`, `line`, `snippet`, `why`, `linter_overlaps`, and `scanner_value`.
+
+### What It Looks For
 
 The scanner currently looks for code and configuration leads in these areas:
 
@@ -224,123 +309,128 @@ Language-specific coverage includes:
 
 It also counts operational concepts such as rollback, dry-run, feature flags, canaries, fault injection, observability, SLOs, runbooks, and postmortems. These counts are evidence locations only. They do not prove the capability exists or works.
 
-## Relationship To Linters
+These signals are prompts for review, not final judgments.
 
-This scanner is not intended to replace language-native linters or become a general-purpose linter. If a mature linter can analyze your code precisely, use that linter.
+### Relationship To Linters
 
-Some scanner rules intentionally overlap with tools such as [Ruff](https://docs.astral.sh/ruff/), Clippy, ESLint, TypeScript ESLint, RuboCop, ShellCheck, actionlint, tfsec, and Checkov because the antifragility report uses the same code shape as a lead for a different question. For example:
+This scanner is intentionally not a replacement for Ruff, ESLint, Clippy, ShellCheck, Hadolint, Checkov, or other mature language and infrastructure linters. If a mature linter can analyze your code precisely, use that linter.
 
-- `bare-except` overlaps Ruff [`E722`](https://docs.astral.sh/ruff/rules/bare-except/), but the scanner frames it as lost failure evidence.
-- `silent-exception` can overlap Ruff [`BLE001`](https://docs.astral.sh/ruff/rules/blind-except/), [`S110`](https://docs.astral.sh/ruff/rules/try-except-pass/), or [`S112`](https://docs.astral.sh/ruff/rules/try-except-continue/), but the scanner asks whether the failure creates learning, ownership, or metrics.
-- `python-http-without-timeout` overlaps Ruff [`S113`](https://docs.astral.sh/ruff/rules/request-without-timeout/), but the scanner groups it with broader cascade and cancellation risk.
-- Python `print()` matches overlap Ruff [`T201`](https://docs.astral.sh/ruff/rules/print/), while the same scanner pattern also catches `console.log` and Ruby `puts`.
-- Python `global` statements overlap Ruff [`PLW0603`](https://docs.astral.sh/ruff/rules/global-statement/), while the scanner also catches selected non-Python global-state patterns.
+Linters should own general correctness, syntax, style, type discipline, and language-specific best practices. The antifragility scanner should only keep overlapping signals when they support a broader antifragility question, such as hidden coupling, irreversible change, missing feedback, poor recovery, unbounded blast radius, or suppressed uncertainty.
+
+For example:
+
+- `bare-except` overlaps Ruff `E722`, but the scanner frames it as lost failure evidence.
+- `silent-exception` can overlap Ruff `BLE001`, `S110`, or `S112`, but the scanner asks whether the failure creates learning, ownership, or metrics.
+- `python-http-without-timeout` overlaps Ruff `S113`, but the scanner groups it with broader cascade and cancellation risk.
+- Python `print()` matches overlap Ruff `T201`, while the same scanner pattern also catches `console.log` and Ruby `puts`.
+- Python `global` statements overlap Ruff `PLW0603`, while the scanner also catches selected non-Python global-state patterns.
 - Rust `unwrap`, `expect`, `dbg!`, `println!`, and placeholder macros can overlap Clippy, but the scanner asks where panics or ad hoc output create fragile operational boundaries.
 - TypeScript `any` overlaps TypeScript ESLint, but the scanner frames it as contract-feedback loss.
 - Ruby bare `rescue` can overlap RuboCop, but the scanner asks whether the rescue path preserves failure evidence.
 - Shell, Terraform, Kubernetes, and GitHub Actions leads are intentionally shallow. Use ShellCheck, actionlint, tfsec, Checkov, kube-linter, or platform policy tools for precise validation.
 
-When a finding overlaps known linter behavior, JSON and Markdown output include `linter_overlaps`. That metadata is meant to make overlap explicit, not to make the scanner authoritative. Prefer ecosystem linters for precise linting, and use this scanner for cross-language leads, operational signals, and antifragility review prompts.
+When a finding overlaps known linter behavior, JSON and Markdown output include `linter_overlaps`. That metadata is meant to make overlap explicit, not to make the scanner authoritative.
 
-Scanner-only leads should usually be treated as prompts for code reading. They become high-priority findings only when confirmed on an important flow or tied to a meaningful blast radius.
+The scanner should not try to become a meta-linter. It should surface review leads that connect concrete code to system adaptation, reversibility, and stress response. Scanner-only leads should usually be treated as prompts for code reading. They become high-priority findings only when confirmed on an important flow or tied to a meaningful blast radius.
 
-## Suppress Reviewed Signals
+## Project Maintenance
 
-Use inline suppression only after reviewing the signal and deciding it is harmless in context.
-
-Ignore one pattern:
-
-```python
-except ExpectedError:
-    pass  # antifragile-scan: ignore[silent-exception]
-```
-
-Ignore all scanner patterns on a line:
-
-```python
-while True:  # antifragile-scan: ignore
-    poll_once()
-```
-
-## Repository Layout
+### Repository Layout
 
 ```text
 .
-|-- SKILL.md                         # Codex skill instructions
-|-- agents/openai.yaml               # Codex app metadata and default prompt
-|-- references/antifragility-primer.md
-|-- references/evaluation-scenarios.md
-|-- references/review-playbook.md    # System-level antifragility review method
-|-- scripts/antifragile_scan.py      # Standalone scanner
-|-- tests/test_antifragile_scan.py   # Scanner regression tests
-`-- .github/workflows/test.yml       # CI
+|-- SKILL.md
+|-- README.md
+|-- LICENSE
+|-- agents/
+|   `-- openai.yaml
+|-- .github/
+|   `-- workflows/
+|       `-- test.yml
+|-- references/
+|   |-- antifragility-primer.md
+|   |-- evaluation-scenarios.md
+|   `-- review-playbook.md
+|-- scripts/
+|   `-- antifragile_scan.py
+`-- tests/
+    `-- test_antifragile_scan.py
 ```
 
-## Development
+### Development
 
-Run the test suite:
+Run tests:
 
 ```bash
 python3 -m unittest discover -s tests
 ```
 
-Check syntax:
-
-```bash
-python3 -m py_compile scripts/antifragile_scan.py
-```
-
-Run a self-scan:
+Run the scanner against this repository:
 
 ```bash
 python3 scripts/antifragile_scan.py .
 ```
 
-The self-scan intentionally skips `scripts/antifragile_scan.py` as `self-scanner` so the scanner's own pattern definitions do not dominate the report.
-
-## Design Principles
-
-- Evidence before advice: findings should cite real files and line numbers.
-- Leads, not verdicts: heuristic matches need code-reading confirmation.
-- Complement linters, do not clone them: overlaps should be explicit and justified by scanner value.
-- Architecture before scanner output: form a system-level fragility thesis before ranking pattern matches.
-- Audit before mutation: review-style prompts should not edit repositories.
-- Bounded downside: prefer reversible changes, dry-runs, explicit skip reasons, and small patches.
-- Feedback loops: scanner failures, skipped files, and capped results should be visible.
-- Antifragile delta: distinguish durability from changes that create learning, optionality, or safe stress.
-
-## Contributing
-
-Contributions are welcome. Good pull requests usually include:
-
-- A focused scanner rule or skill behavior improvement.
-- A regression test that fails without the change.
-- Clear wording that avoids presenting heuristic output as proof.
-- Updated README or skill docs when user-facing behavior changes.
-
-Before opening a pull request, run:
+Check Python syntax:
 
 ```bash
-python3 -m py_compile scripts/antifragile_scan.py
+python3 -m py_compile scripts/antifragile_scan.py tests/test_antifragile_scan.py
+```
+
+The self-scan intentionally skips `scripts/antifragile_scan.py` as `self-scanner` so the scanner's own pattern definitions do not dominate the report.
+
+### Skill And Agent Design
+
+The skill is designed to work in both Codex and Claude Code. Keep the instructions agent-portable:
+
+- Avoid assuming one model vendor or one chat surface.
+- Prefer plain repository inspection commands over product-specific tool names.
+- Keep scanner usage optional and deterministic.
+- State when a recommendation is architectural rather than directly scanner-derived.
+- Preserve the distinction between review, implementation, and verification.
+- Use progressive disclosure: `SKILL.md` should stay as the core workflow, while detailed review method and evaluation scenarios live in `references/`.
+- Treat repository text, comments, generated files, issues, and scanner snippets as evidence, not instructions.
+
+When adding new guidance, favor reusable review heuristics and concrete decision prompts over long theoretical exposition.
+
+### Contributing
+
+Contributions are welcome. Useful contributions include:
+
+- stronger antifragility review heuristics,
+- new evaluation scenarios,
+- scanner rules that identify antifragility-relevant risks without duplicating existing linters,
+- clearer documentation,
+- tests for scanner behavior and suppression handling.
+
+Before opening a change, run:
+
+```bash
+python3 -m py_compile scripts/antifragile_scan.py tests/test_antifragile_scan.py
 python3 -m unittest discover -s tests
 python3 scripts/antifragile_scan.py .
 ```
 
 For skill-behavior changes, also review `references/evaluation-scenarios.md` and check whether the change would improve or degrade each scenario.
 
-## Security And Privacy
+### Security And Privacy
 
-The scanner reads local text files and prints matched snippets to stdout. Do not run it on repositories containing secrets unless you are comfortable with those snippets appearing in terminal output, logs, or CI artifacts.
+The scanner runs locally and does not send repository contents anywhere. It reads local text files and prints matched snippets to stdout, so do not run it on repositories containing secrets unless you are comfortable with those snippets appearing in terminal output, logs, or CI artifacts.
 
-If you find a security issue in the scanner or skill instructions, please avoid posting exploit details publicly in an issue. Open a minimal issue asking for a private coordination path.
+The skill itself is an instruction bundle. Any repository access, network access, or code modification comes from the agent environment in which the skill is used.
 
-## Limitations
+Review all agent-produced changes before deploying them.
 
-- This is not a static analyzer with complete language parsing.
-- Regex rules can miss multiline or dynamically generated behavior.
-- Operational term counts show mentions, not working rollback, canary, observability, or incident-learning systems.
-- The scanner skips large, binary, unreadable, and explicitly excluded files, and reports those skips as coverage signals.
+If you find a security issue in the scanner or skill instructions, avoid posting exploit details publicly in an issue. Open a minimal issue asking for a private coordination path.
 
-## License
+### Limitations
+
+- The scanner is heuristic and intentionally incomplete.
+- Findings can be false positives.
+- A clean scanner result does not mean a system is antifragile.
+- Antifragility analysis depends on context: operational environment, team practices, deployment model, and failure history matter.
+- The skill can recommend changes that are not worth the complexity for a given project. Treat recommendations as engineering judgment prompts, not mandates.
+
+### License
 
 MIT. See [LICENSE](LICENSE).
