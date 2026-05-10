@@ -248,4 +248,4 @@ If you find a security issue in the scanner or skill instructions, please avoid 
 
 ## License
 
-No license file is included yet. Until a license is added, all rights are reserved by default. Add a `LICENSE` file before treating this repository as open source for reuse.
+MIT. See [LICENSE](LICENSE).
