@@ -535,8 +535,22 @@ UPDATE users SET migrated = true;
             ["blast_radius", "dependency_concentration", "ruin_potential"],
             dimensions_by_pattern["retry-without-backoff"],
         )
+        exposure_summary = scan["exposure_summary"]
+        self.assertIn("irreversibility", exposure_summary["dimension_order"])
+        self.assertIn("ruin_potential", exposure_summary["dimension_order"])
+        irreversibility = exposure_summary["dimensions"]["irreversibility"]
+        self.assertGreaterEqual(irreversibility["finding_count"], 4)
+        self.assertIn("What dry-run, rollback, restore, replay, or audit evidence", irreversibility["review_question"])
+        self.assertIn("data-change-missing-dry-run", {
+            item["pattern_id"] for item in irreversibility["top_patterns"]
+        })
+        self.assertIn("scripts/backfill_accounts.py", {item["path"] for item in irreversibility["top_paths"]})
         self.assertIn("Incident artifacts detected: 1", report)
         self.assertIn("Runbook files detected: 1", report)
+        self.assertIn("## Exposure Review Leads", report)
+        self.assertIn("### irreversibility", report)
+        self.assertIn("Review question:", report)
+        self.assertIn("Next move:", report)
 
 
 if __name__ == "__main__":

@@ -53,7 +53,7 @@ Claude Code compatibility:
 python3 "${CLAUDE_SKILL_DIR}/scripts/antifragile_scan.py" /path/to/repo
 ```
 
-Use scanner output as a lead list only, subordinate to the architectural analysis. Confirm important claims by reading the relevant code, tests, docs, and deployment configuration. Treat operational term counts as mention locations, not proof that rollback, canary, observability, or incident-learning capabilities actually work.
+Use scanner output as a lead list only, subordinate to the architectural analysis. The scanner's exposure summary can help choose which blast-radius, irreversibility, feedback-delay, dependency-concentration, or ruin-potential questions to trace next, but it is still only a prioritization aid. Confirm important claims by reading the relevant code, tests, docs, and deployment configuration. Treat operational term counts as mention locations, not proof that rollback, canary, observability, or incident-learning capabilities actually work.
 
 If `${CLAUDE_SKILL_DIR}` is unavailable, replace it with the absolute path to this skill directory.
 

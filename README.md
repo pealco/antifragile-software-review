@@ -325,6 +325,7 @@ The Markdown report includes:
 - language counts by detected language or file family,
 - mention locations for rollback, canary, observability, incident-learning, and fault-experiment terms,
 - skipped file samples caused by size, binary content, read errors, explicit excludes, or self-scan rules,
+- exposure review leads that group findings by blast radius, irreversibility, feedback delay, dependency concentration, and ruin potential,
 - heuristic findings grouped by fragility category,
 - capped finding overflow for additional matches omitted by `--max-per-pattern`,
 - next review moves for a human or agent reviewer.
@@ -337,10 +338,13 @@ JSON output includes:
 - `project_signals`
 - `large_files`
 - `findings`
+- `exposure_summary`
 - `finding_overflow`
 - `skipped_files`
 
 Individual findings include `pattern_id`, `language`, `source_kind`, `category`, `concept`, `path`, `line`, `snippet`, `why`, `linter_overlaps`, `exposure_dimensions`, and `scanner_value`.
+
+The exposure summary is the scanner's bridge back to architectural review. It groups scanner leads by exposure dimension, gives representative evidence locations, and names review questions such as whether a destructive path has dry-run, rollback, restore, replay, or audit evidence. Use it to decide where to trace a critical flow next.
 
 ### What It Looks For
 

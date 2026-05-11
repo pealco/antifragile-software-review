@@ -122,6 +122,20 @@ EXPOSURE_BY_CATEGORY = {
     "Weak observability": ("feedback_delay",),
     "Known fragility markers": ("feedback_delay",),
 }
+EXPOSURE_REVIEW_QUESTIONS = {
+    "blast_radius": "Which critical flows, users, deploys, or data sets share this failure boundary?",
+    "dependency_concentration": "Which vendor, queue, region, secret, owner, or module can stall or corrupt the flow?",
+    "feedback_delay": "How would an owner notice this failure before users, data drift, or incidents reveal it?",
+    "irreversibility": "What dry-run, rollback, restore, replay, or audit evidence proves this can be reversed?",
+    "ruin_potential": "What durable data, financial, security, legal, or trust damage could remain after recovery?",
+}
+EXPOSURE_NEXT_MOVES = {
+    "blast_radius": "Trace the highest-value flow touching these locations and name the containment boundary.",
+    "dependency_concentration": "Look for timeout budgets, degradation paths, replacement options, and owner-visible contracts.",
+    "feedback_delay": "Check whether failures create metrics, alerts, logs with owners, tests, or incident follow-up.",
+    "irreversibility": "Inspect migrations, scripts, and side effects for dry-runs, checkpoints, idempotency, and repair paths.",
+    "ruin_potential": "Verify backups, restore drills, audit trails, compensation, and blast-radius limits before recommending broader changes.",
+}
 DATA_CHANGE_PATH_RE = re.compile(r"(^|/)(migrations?|backfills?|data[-_]?migrations?|repairs?|scripts?)(/|$)|backfill|migration|repair", re.IGNORECASE)
 DATA_MUTATION_RE = re.compile(
     r"\b(ALTER\s+TABLE|DROP\s+(TABLE|COLUMN|DATABASE|SCHEMA|INDEX|TYPE|VIEW)|TRUNCATE\s+TABLE|DELETE\s+FROM|UPDATE\s+\S+\s+SET|INSERT\s+INTO|bulk_update|update_all|delete_all|destroy_all|save!)\b",
@@ -1333,6 +1347,72 @@ def sample_term_locations(signals: dict[str, object], *names: str, max_items: in
     return locations
 
 
+def exposure_summary(findings: list[Finding]) -> dict[str, object]:
+    dimension_items: dict[str, list[Finding]] = {}
+    for finding in findings:
+        for dimension in finding.exposure_dimensions:
+            dimension_items.setdefault(dimension, []).append(finding)
+
+    dimensions: dict[str, object] = {}
+    ordered_dimensions = sorted(
+        dimension_items,
+        key=lambda dimension: (-len(dimension_items[dimension]), dimension),
+    )
+    for dimension in ordered_dimensions:
+        items = dimension_items[dimension]
+        pattern_counts: dict[str, int] = {}
+        path_counts: dict[str, int] = {}
+        categories: set[str] = set()
+        examples = []
+        seen_examples: set[tuple[str, int, str]] = set()
+        for item in items:
+            pattern_counts[item.pattern_id] = pattern_counts.get(item.pattern_id, 0) + 1
+            path_counts[item.path] = path_counts.get(item.path, 0) + 1
+            categories.add(item.category)
+            example_key = (item.path, item.line, item.pattern_id)
+            if example_key not in seen_examples and len(examples) < 3:
+                seen_examples.add(example_key)
+                examples.append(
+                    {
+                        "path": item.path,
+                        "line": item.line,
+                        "pattern_id": item.pattern_id,
+                        "source_kind": item.source_kind,
+                        "language": item.language,
+                        "snippet": item.snippet,
+                    }
+                )
+
+        top_patterns = [
+            {"pattern_id": pattern_id, "count": count}
+            for pattern_id, count in sorted(pattern_counts.items(), key=lambda entry: (-entry[1], entry[0]))[:5]
+        ]
+        top_paths = [
+            {"path": path, "count": count}
+            for path, count in sorted(path_counts.items(), key=lambda entry: (-entry[1], entry[0]))[:5]
+        ]
+        dimensions[dimension] = {
+            "finding_count": len(items),
+            "categories": sorted(categories),
+            "top_patterns": top_patterns,
+            "top_paths": top_paths,
+            "examples": examples,
+            "review_question": EXPOSURE_REVIEW_QUESTIONS.get(dimension, "What critical flow makes this signal matter?"),
+            "next_move": EXPOSURE_NEXT_MOVES.get(dimension, "Confirm whether these leads sit on an important flow."),
+        }
+
+    return {
+        "dimension_order": ordered_dimensions,
+        "dimensions": dimensions,
+    }
+
+
+def format_counted_items(items: list[dict[str, object]], key: str) -> str:
+    if not items:
+        return "none"
+    return ", ".join(f"{item[key]} ({item['count']})" for item in items)
+
+
 def markdown_report(result: dict[str, object]) -> str:
     findings = [Finding(**item) for item in result["findings"]]
     grouped: dict[str, list[Finding]] = {}
@@ -1409,6 +1489,27 @@ def markdown_report(result: dict[str, object]) -> str:
         for item in large_files:
             lines.append(f"- `{item['path']}`: {item['lines']} lines")
         lines.append("")
+
+    summary = result["exposure_summary"]
+    if summary["dimension_order"]:
+        lines.extend(["## Exposure Review Leads", ""])
+        for dimension in summary["dimension_order"]:
+            item = summary["dimensions"][dimension]
+            lines.append(f"### {dimension}")
+            lines.append("")
+            lines.append(f"- Findings: {item['finding_count']}")
+            lines.append(f"- Categories: {', '.join(item['categories'])}")
+            lines.append(f"- Top patterns: {format_counted_items(item['top_patterns'], 'pattern_id')}")
+            lines.append(f"- Top paths: {format_counted_items(item['top_paths'], 'path')}")
+            lines.append(f"- Review question: {item['review_question']}")
+            lines.append(f"- Next move: {item['next_move']}")
+            if item["examples"]:
+                rendered_examples = ", ".join(
+                    f"`{example['path']}:{example['line']}` [{example['pattern_id']}]"
+                    for example in item["examples"]
+                )
+                lines.append(f"- Sample evidence: {rendered_examples}")
+            lines.append("")
 
     if grouped:
         lines.extend(["## Heuristic Findings", ""])
@@ -1493,6 +1594,7 @@ def main() -> int:
         "project_signals": detect_project_signals(root, files, texts),
         "large_files": large_file_signals(root, texts),
         "findings": [asdict(finding) for finding in findings],
+        "exposure_summary": exposure_summary(findings),
         "finding_overflow": dict(sorted(omitted_counts.items())),
         "skipped_files": skipped_files,
     }
