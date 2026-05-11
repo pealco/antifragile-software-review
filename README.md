@@ -11,10 +11,12 @@ The goal is not to make code "perfect" or eliminate all failure. The goal is to 
 This repository contains:
 
 - `SKILL.md`: the skill entrypoint for Codex and Claude Code.
+- `VERSION`: the released package version used by install docs and release checks.
 - `references/review-playbook.md`: the system-level review method for architecture, operations, release, data, dependency, testing, and incident-learning analysis.
 - `references/evaluation-scenarios.md`: representative behavior checks for keeping the skill architecture-first, evidence-driven, and resistant to scanner overfitting.
 - `references/scanner-rules.md`: generated scanner rule metadata for reviewing coverage, linter overlap, and exposure dimensions.
 - `scripts/antifragile_scan.py`: a dependency-free Python scanner that surfaces review leads across several languages, runtimes, and infrastructure files.
+- `scripts/check_package_contract.py`: a CI-enforced package consistency check for skill metadata, references, release pins, generated docs, and workflow pins.
 - `templates/review-scorecard.md`: a reusable scorecard for critical-flow traces, exposure scoring, and findings.
 - `examples/scorecard-review.md`: a compact example of the review scorecard filled out for a realistic service.
 - `evals/`: executable fixture checks for the highest-value skill behaviors.
@@ -400,6 +402,7 @@ The scanner should not try to become a meta-linter. It should surface review lea
 |-- SKILL.md
 |-- README.md
 |-- LICENSE
+|-- VERSION
 |-- agents/
 |   `-- openai.yaml
 |-- evals/
@@ -416,6 +419,7 @@ The scanner should not try to become a meta-linter. It should surface review lea
 |   |-- review-playbook.md
 |   `-- scanner-rules.md
 |-- scripts/
+|   |-- check_package_contract.py
 |   `-- antifragile_scan.py
 |-- templates/
 |   `-- review-scorecard.md
@@ -437,6 +441,12 @@ Run the scanner against this repository:
 python3 scripts/antifragile_scan.py .
 ```
 
+Run package contract checks:
+
+```bash
+python3 scripts/check_package_contract.py
+```
+
 Run executable skill behavior fixtures:
 
 ```bash
@@ -452,7 +462,7 @@ python3 scripts/antifragile_scan.py --list-rules > references/scanner-rules.md
 Check Python syntax:
 
 ```bash
-python3 -m py_compile scripts/antifragile_scan.py tests/test_antifragile_scan.py tests/test_evaluation_scenarios.py evals/run_evals.py
+python3 -m py_compile scripts/antifragile_scan.py scripts/check_package_contract.py tests/test_antifragile_scan.py tests/test_evaluation_scenarios.py evals/run_evals.py
 ```
 
 The self-scan intentionally skips `scripts/antifragile_scan.py` as `self-scanner` so the scanner's own pattern definitions do not dominate the report.
@@ -484,7 +494,8 @@ Contributions are welcome. Useful contributions include:
 Before opening a change, run:
 
 ```bash
-python3 -m py_compile scripts/antifragile_scan.py tests/test_antifragile_scan.py tests/test_evaluation_scenarios.py evals/run_evals.py
+python3 -m py_compile scripts/antifragile_scan.py scripts/check_package_contract.py tests/test_antifragile_scan.py tests/test_evaluation_scenarios.py evals/run_evals.py
+python3 scripts/check_package_contract.py
 python3 -m unittest discover -s tests
 python3 evals/run_evals.py
 python3 scripts/antifragile_scan.py .
