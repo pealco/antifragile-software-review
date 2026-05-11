@@ -23,7 +23,7 @@ The scanner is deliberately secondary. It helps discover concrete code smells an
 
 ## Install
 
-For reproducible installs, prefer the latest release tag. The examples below pin `v0.1.0`. Clone from `main` only when you intentionally want unreleased changes.
+For reproducible installs, prefer the latest release tag. The examples below pin `v0.1.1`. Clone from `main` only when you intentionally want unreleased changes.
 
 ### Claude Code
 
@@ -33,7 +33,7 @@ Install the stable release as a personal Claude Code skill:
 
 ```bash
 mkdir -p ~/.claude/skills
-git clone --branch v0.1.0 https://github.com/pealco/antifragile-software-review.git \
+git clone --branch v0.1.1 https://github.com/pealco/antifragile-software-review.git \
   ~/.claude/skills/antifragile-software-review
 ```
 
@@ -64,7 +64,7 @@ Install it as a project-scoped Claude Code skill when you want the review workfl
 
 ```bash
 mkdir -p .claude/skills
-git submodule add --branch v0.1.0 https://github.com/pealco/antifragile-software-review.git \
+git submodule add --branch v0.1.1 https://github.com/pealco/antifragile-software-review.git \
   .claude/skills/antifragile-software-review
 ```
 
@@ -80,7 +80,7 @@ Switch an installed Claude Code skill to a release tag:
 
 ```bash
 git -C ~/.claude/skills/antifragile-software-review fetch --tags
-git -C ~/.claude/skills/antifragile-software-review checkout v0.1.0
+git -C ~/.claude/skills/antifragile-software-review checkout v0.1.1
 ```
 
 Uninstall the personal Claude Code skill:
@@ -101,7 +101,7 @@ Install the stable release as a Codex skill:
 
 ```bash
 mkdir -p ~/.codex/skills
-git clone --branch v0.1.0 https://github.com/pealco/antifragile-software-review.git \
+git clone --branch v0.1.1 https://github.com/pealco/antifragile-software-review.git \
   ~/.codex/skills/antifragile-software-review
 ```
 
@@ -138,7 +138,7 @@ Switch an installed Codex skill to a release tag:
 
 ```bash
 git -C ~/.codex/skills/antifragile-software-review fetch --tags
-git -C ~/.codex/skills/antifragile-software-review checkout v0.1.0
+git -C ~/.codex/skills/antifragile-software-review checkout v0.1.1
 ```
 
 Uninstall the Codex skill:
