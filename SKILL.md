@@ -11,7 +11,7 @@ argument-hint: "[repo-path or focus]"
 
 Inspect the codebase for architectural and operational design choices that are harmed by volatility, uncertainty, stress, errors, growth, incidents, or changing requirements. Produce concrete findings and changes that help the system gain information, options, or safety from small failures instead of merely surviving them.
 
-Load `references/review-playbook.md` for the review method. Load `references/antifragility-primer.md` when you need the conceptual mapping from Taleb's ideas to software design. Use `templates/review-scorecard.md` when the user wants a reusable review artifact or when a compact scorecard would make findings easier to compare. When changing this skill, use `references/evaluation-scenarios.md` and `evals/run_evals.py` as the behavior checklist.
+Load `references/review-playbook.md` for the review method. Load `references/antifragility-primer.md` when you need the conceptual mapping from Taleb's ideas to software design. Use `templates/review-scorecard.md` when the user wants a reusable review artifact or when a compact scorecard would make findings easier to compare; `examples/scorecard-review.md` shows the intended level of specificity. When changing this skill, use `references/evaluation-scenarios.md` and `evals/run_evals.py` as the behavior checklist.
 
 Claude Code compatibility:
 - The skill can be invoked directly as `/antifragile-software-review [repo-path or focus]`; treat any provided arguments as the target repository, review scope, or implementation focus.
@@ -65,6 +65,8 @@ Useful scanner controls:
 python3 "${CLAUDE_SKILL_DIR}/scripts/antifragile_scan.py" /path/to/repo --exclude 'fixtures/**'
 python3 "${CLAUDE_SKILL_DIR}/scripts/antifragile_scan.py" --list-rules
 ```
+
+The generated rule catalog lives in `references/scanner-rules.md`. Use it when reviewing scanner coverage or deciding whether a new signal belongs in the scanner or in a mature ecosystem linter.
 
 Add `antifragile-scan: ignore` or `antifragile-scan: ignore[pattern-id]` on a line only when the signal is intentionally reviewed and harmless.
 

@@ -13,22 +13,33 @@ This repository contains:
 - `SKILL.md`: the skill entrypoint for Codex and Claude Code.
 - `references/review-playbook.md`: the system-level review method for architecture, operations, release, data, dependency, testing, and incident-learning analysis.
 - `references/evaluation-scenarios.md`: representative behavior checks for keeping the skill architecture-first, evidence-driven, and resistant to scanner overfitting.
+- `references/scanner-rules.md`: generated scanner rule metadata for reviewing coverage, linter overlap, and exposure dimensions.
 - `scripts/antifragile_scan.py`: a dependency-free Python scanner that surfaces review leads across several languages, runtimes, and infrastructure files.
 - `templates/review-scorecard.md`: a reusable scorecard for critical-flow traces, exposure scoring, and findings.
+- `examples/scorecard-review.md`: a compact example of the review scorecard filled out for a realistic service.
 - `evals/`: executable fixture checks for the highest-value skill behaviors.
 
 The scanner is deliberately secondary. It helps discover concrete code smells and review leads, but the skill's main value is broader architectural, operational, and design analysis.
 
 ## Install
 
+For reproducible installs, prefer the latest release tag. The examples below pin `v0.1.0`. Clone from `main` only when you intentionally want unreleased changes.
+
 ### Claude Code
 
 Claude Code discovers skills from `~/.claude/skills` for personal skills and `.claude/skills` for project-local skills. This repository can be installed either way.
 
-Install as a personal Claude Code skill:
+Install the stable release as a personal Claude Code skill:
 
 ```bash
 mkdir -p ~/.claude/skills
+git clone --branch v0.1.0 https://github.com/pealco/antifragile-software-review.git \
+  ~/.claude/skills/antifragile-software-review
+```
+
+Track `main` instead when you want unreleased changes:
+
+```bash
 git clone https://github.com/pealco/antifragile-software-review.git \
   ~/.claude/skills/antifragile-software-review
 ```
@@ -53,7 +64,7 @@ Install it as a project-scoped Claude Code skill when you want the review workfl
 
 ```bash
 mkdir -p .claude/skills
-git submodule add https://github.com/pealco/antifragile-software-review.git \
+git submodule add --branch v0.1.0 https://github.com/pealco/antifragile-software-review.git \
   .claude/skills/antifragile-software-review
 ```
 
@@ -63,6 +74,13 @@ Update the Claude Code skill:
 
 ```bash
 git -C ~/.claude/skills/antifragile-software-review pull --ff-only
+```
+
+Switch an installed Claude Code skill to a release tag:
+
+```bash
+git -C ~/.claude/skills/antifragile-software-review fetch --tags
+git -C ~/.claude/skills/antifragile-software-review checkout v0.1.0
 ```
 
 Uninstall the personal Claude Code skill:
@@ -79,10 +97,17 @@ Requirements:
 - Python 3.10 or newer if you want to run the scanner directly.
 - Git for installing and updating from GitHub.
 
-Install as a Codex skill:
+Install the stable release as a Codex skill:
 
 ```bash
 mkdir -p ~/.codex/skills
+git clone --branch v0.1.0 https://github.com/pealco/antifragile-software-review.git \
+  ~/.codex/skills/antifragile-software-review
+```
+
+Track `main` instead when you want unreleased changes:
+
+```bash
 git clone https://github.com/pealco/antifragile-software-review.git \
   ~/.codex/skills/antifragile-software-review
 ```
@@ -107,6 +132,13 @@ Update the Codex skill:
 
 ```bash
 git -C ~/.codex/skills/antifragile-software-review pull --ff-only
+```
+
+Switch an installed Codex skill to a release tag:
+
+```bash
+git -C ~/.codex/skills/antifragile-software-review fetch --tags
+git -C ~/.codex/skills/antifragile-software-review checkout v0.1.0
 ```
 
 Uninstall the Codex skill:
@@ -183,6 +215,8 @@ List rule metadata, including rule ids, categories, linter overlaps, and exposur
 python3 scripts/antifragile_scan.py --list-rules
 python3 scripts/antifragile_scan.py --list-rules --json
 ```
+
+The generated Markdown catalog is committed at `references/scanner-rules.md`.
 
 ### Suppress Reviewed Signals
 
@@ -371,13 +405,16 @@ The scanner should not try to become a meta-linter. It should surface review lea
 |-- evals/
 |   |-- fixtures/
 |   `-- run_evals.py
+|-- examples/
+|   `-- scorecard-review.md
 |-- .github/
 |   `-- workflows/
 |       `-- test.yml
 |-- references/
 |   |-- antifragility-primer.md
 |   |-- evaluation-scenarios.md
-|   `-- review-playbook.md
+|   |-- review-playbook.md
+|   `-- scanner-rules.md
 |-- scripts/
 |   `-- antifragile_scan.py
 |-- templates/
@@ -404,6 +441,12 @@ Run executable skill behavior fixtures:
 
 ```bash
 python3 evals/run_evals.py
+```
+
+Regenerate scanner rule documentation after scanner metadata changes:
+
+```bash
+python3 scripts/antifragile_scan.py --list-rules > references/scanner-rules.md
 ```
 
 Check Python syntax:
