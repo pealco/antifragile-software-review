@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCANNER = ROOT / "scripts" / "antifragile_scan.py"
 SCENARIOS = ROOT / "references" / "evaluation-scenarios.md"
 FIXTURES = ROOT / "evals" / "fixtures"
+GOLDEN = ROOT / "evals" / "golden"
 
 REQUIRED_REVIEW_MARKERS = (
     "## Antifragility Thesis",
@@ -38,6 +39,14 @@ EVAL_CASES = (
         },
         "expected_incident_files": 0,
         "expected_runbook_files": 1,
+        "golden": "critical-flow-service.md",
+        "required_review_text": (
+            "[P1] Billing provider timeout and swallowed errors can create incorrect charge state",
+            "Exposure score: 12/15",
+            "python-http-without-timeout",
+            "silent-exception",
+            "Cheapest observation: reproduce a provider timeout against a fake billing endpoint and assert invoice state plus telemetry.",
+        ),
     },
     {
         "title": "Data-Ruin And Incident-Learning Review",
@@ -50,6 +59,14 @@ EVAL_CASES = (
         },
         "expected_incident_files": 1,
         "expected_runbook_files": 1,
+        "golden": "data-ruin-incident-learning.md",
+        "required_review_text": (
+            "[P1] Destructive data changes lack dry-run and checkpoint evidence",
+            "Exposure score: 13/15",
+            "data-change-missing-dry-run",
+            "data-change-missing-checkpoint",
+            "Gain mechanism: cheaper reversal and incident-to-test conversion.",
+        ),
     },
     {
         "title": "Optionality Without Premature Abstraction",
@@ -58,6 +75,13 @@ EVAL_CASES = (
         "expected_incident_files": 0,
         "expected_runbook_files": 0,
         "max_findings": 0,
+        "golden": "optionality-premature-abstraction.md",
+        "required_review_text": (
+            "[P2] Provider adapter proposal lacks enough uncertainty to justify broad abstraction",
+            "Exposure score: 4/15",
+            "Do not build the adapter yet.",
+            "Cheapest observation: identify a plausible second provider or observe provider-change pressure before adding a broad boundary.",
+        ),
     },
 )
 
@@ -110,11 +134,25 @@ def validate_fixture_case(case: dict[str, object], scenario_titles: set[str]) ->
             fail(f"{title}: expected {key}={case[expected_key]}, got {signals[key]}")
 
 
-def validate_review_output(path: Path) -> None:
-    text = path.read_text(encoding="utf-8")
+def validate_review_text(text: str, label: str) -> None:
     missing = [marker for marker in REQUIRED_REVIEW_MARKERS if marker not in text]
     if missing:
-        fail(f"review output is missing required marker(s): {', '.join(missing)}")
+        fail(f"{label} is missing required marker(s): {', '.join(missing)}")
+
+
+def validate_review_output(path: Path) -> None:
+    validate_review_text(path.read_text(encoding="utf-8"), str(path))
+
+
+def validate_golden_output(case: dict[str, object]) -> None:
+    golden = GOLDEN / str(case["golden"])
+    if not golden.is_file():
+        fail(f"golden review output missing: {golden}")
+    text = golden.read_text(encoding="utf-8")
+    validate_review_text(text, str(golden))
+    missing = [marker for marker in case.get("required_review_text", ()) if str(marker) not in text]
+    if missing:
+        fail(f"{case['title']}: golden review missing expected text: {', '.join(missing)}")
 
 
 def main() -> int:
@@ -129,6 +167,7 @@ def main() -> int:
     scenario_titles = parse_scenario_titles()
     for case in EVAL_CASES:
         validate_fixture_case(case, scenario_titles)
+        validate_golden_output(case)
 
     if args.review_output:
         validate_review_output(args.review_output)

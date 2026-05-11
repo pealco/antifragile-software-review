@@ -297,7 +297,7 @@ JSON output includes:
 - `finding_overflow`
 - `skipped_files`
 
-Individual findings include `pattern_id`, `language`, `source_kind`, `category`, `concept`, `path`, `line`, `snippet`, `why`, `linter_overlaps`, and `scanner_value`.
+Individual findings include `pattern_id`, `language`, `source_kind`, `category`, `concept`, `path`, `line`, `snippet`, `why`, `linter_overlaps`, `exposure_dimensions`, and `scanner_value`.
 
 ### What It Looks For
 

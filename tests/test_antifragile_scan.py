@@ -66,6 +66,7 @@ except Exception: pass
         self.assertEqual("code", scan["findings"][0]["source_kind"])
         self.assertEqual("python", scan["findings"][0]["language"])
         self.assertEqual(["ruff:BLE001", "ruff:S110"], scan["findings"][0]["linter_overlaps"])
+        self.assertEqual(["feedback_delay"], scan["findings"][0]["exposure_dimensions"])
         self.assertIn("lost learning", scan["findings"][0]["scanner_value"])
 
     def test_inline_suppression_can_ignore_one_pattern_or_a_whole_line(self) -> None:
@@ -197,6 +198,7 @@ requests.get("https://example.com")
         self.assertEqual(["ruff:T201"], overlaps_by_pattern["debug-print"])
         self.assertEqual(["ruff:S113"], overlaps_by_pattern["python-http-without-timeout"])
         self.assertIn("Linter overlap: ruff:E722", report)
+        self.assertIn("Exposure dimensions:", report)
         self.assertIn("Scanner value:", report)
 
     def test_language_specific_rust_typescript_and_sql_leads(self) -> None:
@@ -484,6 +486,18 @@ UPDATE users SET migrated = true;
         )
         self.assertEqual(1, scan["project_signals"]["incident_file_count"])
         self.assertEqual(1, scan["project_signals"]["runbook_file_count"])
+        dimensions_by_pattern = {
+            finding["pattern_id"]: finding["exposure_dimensions"]
+            for finding in scan["findings"]
+        }
+        self.assertEqual(
+            ["irreversibility", "ruin_potential"],
+            dimensions_by_pattern["data-change-missing-dry-run"],
+        )
+        self.assertEqual(
+            ["blast_radius", "dependency_concentration", "ruin_potential"],
+            dimensions_by_pattern["retry-without-backoff"],
+        )
         self.assertIn("Incident artifacts detected: 1", report)
         self.assertIn("Runbook files detected: 1", report)
 

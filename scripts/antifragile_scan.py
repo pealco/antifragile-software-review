@@ -113,6 +113,15 @@ TEST_DIR_NAMES = {"__tests__", "spec", "test", "tests"}
 
 INLINE_IGNORE_RE = re.compile(r"antifragile-scan:\s*ignore(?:\[([^\]]+)\])?", re.IGNORECASE)
 SOURCE_KINDS = ("code", "config", "docs", "tests")
+EXPOSURE_BY_CATEGORY = {
+    "Silent failure and lost learning": ("feedback_delay",),
+    "Prediction and timing dependence": ("feedback_delay", "dependency_concentration"),
+    "Cascade and ruin risk": ("blast_radius", "dependency_concentration", "ruin_potential"),
+    "Irreversibility": ("irreversibility", "ruin_potential"),
+    "Centralized state and tight coupling": ("dependency_concentration", "blast_radius"),
+    "Weak observability": ("feedback_delay",),
+    "Known fragility markers": ("feedback_delay",),
+}
 DATA_CHANGE_PATH_RE = re.compile(r"(^|/)(migrations?|backfills?|data[-_]?migrations?|repairs?|scripts?)(/|$)|backfill|migration|repair", re.IGNORECASE)
 DATA_MUTATION_RE = re.compile(
     r"\b(ALTER\s+TABLE|DROP\s+(TABLE|COLUMN|DATABASE|SCHEMA|INDEX|TYPE|VIEW)|TRUNCATE\s+TABLE|DELETE\s+FROM|UPDATE\s+\S+\s+SET|INSERT\s+INTO|bulk_update|update_all|delete_all|destroy_all|save!)\b",
@@ -186,6 +195,7 @@ class Pattern:
     source_kinds: tuple[str, ...] = ("code", "config")
     languages: tuple[str, ...] = ()
     linter_overlaps: tuple[str, ...] = ()
+    exposure_dimensions: tuple[str, ...] = ()
     scanner_value: str = "Antifragility review lead; confirm in context before treating it as a finding."
 
 
@@ -200,6 +210,7 @@ class Finding:
     concept: str
     why: str
     linter_overlaps: tuple[str, ...]
+    exposure_dimensions: tuple[str, ...]
     scanner_value: str
     snippet: str
 
@@ -728,6 +739,12 @@ def linter_overlaps_for_pattern(pattern: Pattern, line: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(overlaps))
 
 
+def exposure_dimensions_for(category: str, dimensions: tuple[str, ...] = ()) -> tuple[str, ...]:
+    if dimensions:
+        return dimensions
+    return EXPOSURE_BY_CATEGORY.get(category, ())
+
+
 def skip_reason(root: Path, path: Path, exclude_globs: list[str], scanner_path: Path) -> str | None:
     rel = rel_path(path, root)
     if path.resolve() == scanner_path and root in scanner_path.parents:
@@ -789,6 +806,7 @@ def find_pattern_matches(
                         concept=pattern.concept,
                         why=pattern.why,
                         linter_overlaps=linter_overlaps_for_pattern(pattern, search_line),
+                        exposure_dimensions=exposure_dimensions_for(pattern.category, pattern.exposure_dimensions),
                         scanner_value=pattern.scanner_value,
                         snippet=stripped[:220],
                     )
@@ -827,6 +845,7 @@ def custom_file_findings(
         scanner_value: str,
         line_number: int,
         snippet: str,
+        exposure_dimensions: tuple[str, ...] = (),
     ) -> None:
         if file_ignore_applies(text, pattern_id):
             return
@@ -841,6 +860,7 @@ def custom_file_findings(
                 concept=concept,
                 why=why,
                 linter_overlaps=(),
+                exposure_dimensions=exposure_dimensions_for(category, exposure_dimensions),
                 scanner_value=scanner_value,
                 snippet=snippet,
             )
@@ -965,6 +985,10 @@ def custom_line_findings(
                 concept="bounded downside",
                 why="Outbound calls without explicit timeouts can turn dependency latency into thread or worker exhaustion.",
                 linter_overlaps=("ruff:S113",),
+                exposure_dimensions=exposure_dimensions_for(
+                    "Cascade and ruin risk",
+                    ("blast_radius", "dependency_concentration", "feedback_delay"),
+                ),
                 scanner_value="Keeps timeout risk in the antifragility report beside non-Python cancellation and cascade signals.",
                 snippet=stripped[:220],
             )
@@ -982,6 +1006,10 @@ def custom_line_findings(
                 concept="bounded downside",
                 why="Fetch calls without cancellation can outlive their usefulness under latency or navigation changes.",
                 linter_overlaps=(),
+                exposure_dimensions=exposure_dimensions_for(
+                    "Cascade and ruin risk",
+                    ("blast_radius", "dependency_concentration", "feedback_delay"),
+                ),
                 scanner_value="Covers browser and JavaScript cancellation risk outside Ruff's Python-only scope.",
                 snippet=stripped[:220],
             )
@@ -1217,6 +1245,9 @@ def markdown_report(result: dict[str, object]) -> str:
                 if item.linter_overlaps:
                     overlaps = ", ".join(item.linter_overlaps)
                     lines.append(f"  - Linter overlap: {overlaps}")
+                if item.exposure_dimensions:
+                    dimensions = ", ".join(item.exposure_dimensions)
+                    lines.append(f"  - Exposure dimensions: {dimensions}")
                 lines.append(f"  - Scanner value: {item.scanner_value}")
             lines.append("")
     else:
