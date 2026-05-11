@@ -136,9 +136,41 @@ EXPOSURE_NEXT_MOVES = {
     "irreversibility": "Inspect migrations, scripts, and side effects for dry-runs, checkpoints, idempotency, and repair paths.",
     "ruin_potential": "Verify backups, restore drills, audit trails, compensation, and blast-radius limits before recommending broader changes.",
 }
+FLOW_ENTRYPOINT_RE = re.compile(
+    r"(@(?:app|router|bp)\.(?:route|get|post|put|patch|delete)\b|"
+    r"\b(?:app|router|server)\.(?:get|post|put|patch|delete)\s*\(|"
+    r"\bdef\s+(?:main|handler|handle_\w+|\w+_handler)\b|"
+    r"\bfunc\s+main\s*\(|"
+    r"\bfunction\s+(?:handler|handle\w*)\b|"
+    r"\bexports\.handler\b|"
+    r"\bclass\s+\w*(?:Controller|Handler|Worker|Job)\b|"
+    r"\b(click\.command|argparse|commander|yargs|webhook|consumer|worker|job|cron)\b)",
+    re.IGNORECASE,
+)
+FLOW_DEPENDENCY_RE = re.compile(
+    r"\b(requests|httpx|fetch|axios|grpc|subprocess|exec|spawn|boto3|redis|kafka|rabbitmq|queue|stripe|payment|provider)\b|"
+    r"\bhttp\.(?:Get|Head|Post|PostForm)\s*\(|"
+    r"\bclient\.(?:get|post|send|call)\s*\(|"
+    r"https?://",
+    re.IGNORECASE,
+)
+FLOW_RELEASE_OPS_RE = re.compile(
+    r"\b(deploy|release|rollback|roll back|revert|canary|workflow_dispatch|environment|approval|migration)\b",
+    re.IGNORECASE,
+)
+FLOW_FEEDBACK_RE = re.compile(
+    r"\b(metric|metrics|trace|tracing|span|slo|alert|dashboard|runbook|postmortem|post-mortem|incident)\b",
+    re.IGNORECASE,
+)
 DATA_CHANGE_PATH_RE = re.compile(r"(^|/)(migrations?|backfills?|data[-_]?migrations?|repairs?|scripts?)(/|$)|backfill|migration|repair", re.IGNORECASE)
+DATA_CHANGE_ANCHOR_PATH_RE = re.compile(r"(^|/)(migrations?|backfills?|data[-_]?migrations?|repairs?)(/|$)|backfill|migration|repair", re.IGNORECASE)
 DATA_MUTATION_RE = re.compile(
     r"\b(ALTER\s+TABLE|DROP\s+(TABLE|COLUMN|DATABASE|SCHEMA|INDEX|TYPE|VIEW)|TRUNCATE\s+TABLE|DELETE\s+FROM|UPDATE\s+\S+\s+SET|INSERT\s+INTO|bulk_update|update_all|delete_all|destroy_all|save!)\b",
+    re.IGNORECASE,
+)
+FLOW_STATE_RE = re.compile(
+    DATA_MUTATION_RE.pattern
+    + r"|\b(?:db|database|repo|repository|session|client)\.(?:execute|save|insert|update|delete|commit)\b",
     re.IGNORECASE,
 )
 DATA_DRY_RUN_RE = re.compile(r"\b(dry[-_ ]?run|preview|noop|no-op|plan|--check)\b", re.IGNORECASE)
@@ -1347,6 +1379,159 @@ def sample_term_locations(signals: dict[str, object], *names: str, max_items: in
     return locations
 
 
+def first_matching_compiled(text: str, regex: re.Pattern[str]) -> tuple[int, str] | None:
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        if regex.search(line):
+            return line_number, line.strip()[:220]
+    return None
+
+
+def flow_anchor_evidence(root: Path, path: Path, text: str) -> list[dict[str, object]]:
+    rel = rel_path(path, root)
+    lower_rel = rel.lower()
+    language = language_for_path(path)
+    evidence: list[dict[str, object]] = []
+    seen_kinds: set[str] = set()
+
+    def add(kind: str, detail: str, line: int, snippet: str) -> None:
+        if kind in seen_kinds:
+            return
+        seen_kinds.add(kind)
+        evidence.append(
+            {
+                "kind": kind,
+                "detail": detail,
+                "line": line,
+                "snippet": snippet[:220],
+            }
+        )
+
+    for kind, detail, regex in (
+        ("entrypoint", "route, handler, job, CLI, webhook, or consumer marker", FLOW_ENTRYPOINT_RE),
+        ("state_mutation", "state mutation or external side-effect marker", FLOW_STATE_RE),
+        ("dependency", "external dependency, queue, provider, subprocess, or HTTP marker", FLOW_DEPENDENCY_RE),
+        ("release_ops", "release, deploy, rollback, canary, or migration marker", FLOW_RELEASE_OPS_RE),
+        ("feedback_loop", "metric, alert, trace, runbook, or incident marker", FLOW_FEEDBACK_RE),
+    ):
+        match = first_matching_compiled(text, regex)
+        if match:
+            line_number, snippet = match
+            add(kind, detail, line_number, snippet)
+
+    if language == "github-actions":
+        add("release_ops", "GitHub Actions workflow file", 1, rel)
+    if DATA_CHANGE_ANCHOR_PATH_RE.search(rel):
+        add("state_mutation", "migration, backfill, repair, or data-change path", 1, rel)
+    if re.search(r"(^|/)(api|routes?|controllers?|handlers?|views?|webhooks?)(/|$)", lower_rel):
+        add("entrypoint", "entrypoint-like path", 1, rel)
+    if re.search(r"(^|/)(jobs?|workers?|consumers?|cron|tasks?)(/|$)", lower_rel):
+        add("entrypoint", "job, worker, consumer, cron, or task path", 1, rel)
+    if re.search(r"(^|/)(runbooks?|incidents?|postmortems?)(/|$)", lower_rel):
+        add("feedback_loop", "runbook or incident path", 1, rel)
+
+    return evidence
+
+
+def flow_type_for(path: str, language: str, anchor_kinds: list[str]) -> str:
+    anchors = set(anchor_kinds)
+    if language == "github-actions" or "release_ops" in anchors and ".github/workflows/" in path:
+        return "ci/release path"
+    if "state_mutation" in anchors and DATA_CHANGE_ANCHOR_PATH_RE.search(path):
+        return "data mutation path"
+    if {"entrypoint", "state_mutation", "dependency"} <= anchors:
+        return "request or job critical path"
+    if {"entrypoint", "dependency"} <= anchors:
+        return "dependency-facing entrypoint"
+    if "entrypoint" in anchors:
+        return "entrypoint"
+    if "feedback_loop" in anchors:
+        return "operational feedback path"
+    return "review path"
+
+
+def trace_question_for(flow_type: str, path: str, exposure_dimensions: list[str]) -> str:
+    if flow_type == "ci/release path":
+        return "Trace from trigger to jobs, permissions, concurrency, dependencies, artifacts, and release or rollback verification if it deploys."
+    if flow_type == "data mutation path":
+        return "Trace the data change from target selection to mutation, dry-run, checkpoint, rollback or repair, and audit evidence."
+    if flow_type == "request or job critical path":
+        return "Trace from entrypoint to state mutation, dependency calls, failure handling, observability, and degradation or rollback."
+    if flow_type == "dependency-facing entrypoint":
+        return "Trace dependency timeout, cancellation, retry budget, fallback, and owner-visible failure evidence from this entrypoint."
+    if "feedback_delay" in exposure_dimensions:
+        return "Trace how this path turns failure into metrics, alerts, tests, runbooks, or incident follow-up."
+    return f"Trace `{path}` across trigger, state, dependency, failure handling, feedback, and reversal evidence."
+
+
+def critical_flow_candidates(root: Path, texts: dict[Path, str], findings: list[Finding]) -> list[dict[str, object]]:
+    findings_by_path: dict[str, list[Finding]] = {}
+    for finding in findings:
+        findings_by_path.setdefault(finding.path, []).append(finding)
+
+    candidates: list[dict[str, object]] = []
+    for path, text in texts.items():
+        rel = rel_path(path, root)
+        source_kind = classify_path(path)
+        operational_doc = bool(re.search(r"(^|/)(runbooks?|incidents?|postmortems?)(/|$)", rel, re.IGNORECASE))
+        if source_kind == "tests" or (source_kind == "docs" and not operational_doc):
+            continue
+
+        evidence = flow_anchor_evidence(root, path, text)
+        if not evidence:
+            continue
+
+        path_findings = findings_by_path.get(rel, [])
+        exposure_dimensions = sorted(
+            {
+                dimension
+                for finding in path_findings
+                for dimension in finding.exposure_dimensions
+            }
+        )
+        anchor_kinds = [item["kind"] for item in evidence]
+        anchor_set = set(anchor_kinds)
+        if not exposure_dimensions:
+            meaningful_without_exposure = (
+                language_for_path(path) == "github-actions"
+                or operational_doc
+                or {"entrypoint", "state_mutation", "dependency"} <= anchor_set
+                or {"state_mutation", "dependency"} <= anchor_set
+                or "state_mutation" in anchor_set and DATA_CHANGE_ANCHOR_PATH_RE.search(rel)
+            )
+            if not meaningful_without_exposure:
+                continue
+
+        pattern_counts: dict[str, int] = {}
+        for finding in path_findings:
+            pattern_counts[finding.pattern_id] = pattern_counts.get(finding.pattern_id, 0) + 1
+        supporting_patterns = [
+            pattern_id for pattern_id, _count in sorted(pattern_counts.items(), key=lambda entry: (-entry[1], entry[0]))[:6]
+        ]
+
+        language = language_for_path(path)
+        flow_type = flow_type_for(rel, language, anchor_kinds)
+        score = len(anchor_set) * 2 + len(exposure_dimensions) * 3 + min(len(path_findings), 6)
+        if flow_type in {"request or job critical path", "data mutation path", "ci/release path"}:
+            score += 3
+
+        candidates.append(
+            {
+                "path": rel,
+                "source_kind": source_kind,
+                "language": language,
+                "flow_type": flow_type,
+                "score": score,
+                "anchor_kinds": anchor_kinds,
+                "exposure_dimensions": exposure_dimensions,
+                "supporting_patterns": supporting_patterns,
+                "evidence": evidence[:5],
+                "trace_question": trace_question_for(flow_type, rel, exposure_dimensions),
+            }
+        )
+
+    return sorted(candidates, key=lambda item: (-int(item["score"]), str(item["path"])))[:10]
+
+
 def exposure_summary(findings: list[Finding]) -> dict[str, object]:
     dimension_items: dict[str, list[Finding]] = {}
     for finding in findings:
@@ -1490,6 +1675,25 @@ def markdown_report(result: dict[str, object]) -> str:
             lines.append(f"- `{item['path']}`: {item['lines']} lines")
         lines.append("")
 
+    flow_candidates = result["critical_flow_candidates"]
+    if flow_candidates:
+        lines.extend(["## Critical Flow Candidates", ""])
+        for item in flow_candidates:
+            lines.append(f"- `{item['path']}` [{item['flow_type']}; score {item['score']}]")
+            lines.append(f"  - Anchors: {', '.join(item['anchor_kinds'])}")
+            if item["exposure_dimensions"]:
+                lines.append(f"  - Exposure overlap: {', '.join(item['exposure_dimensions'])}")
+            if item["supporting_patterns"]:
+                lines.append(f"  - Supporting patterns: {', '.join(item['supporting_patterns'])}")
+            lines.append(f"  - Trace question: {item['trace_question']}")
+            if item["evidence"]:
+                rendered_evidence = ", ".join(
+                    f"`{item['path']}:{evidence['line']}` [{evidence['kind']}]"
+                    for evidence in item["evidence"]
+                )
+                lines.append(f"  - Evidence: {rendered_evidence}")
+        lines.append("")
+
     summary = result["exposure_summary"]
     if summary["dimension_order"]:
         lines.extend(["## Exposure Review Leads", ""])
@@ -1594,6 +1798,7 @@ def main() -> int:
         "project_signals": detect_project_signals(root, files, texts),
         "large_files": large_file_signals(root, texts),
         "findings": [asdict(finding) for finding in findings],
+        "critical_flow_candidates": critical_flow_candidates(root, texts, findings),
         "exposure_summary": exposure_summary(findings),
         "finding_overflow": dict(sorted(omitted_counts.items())),
         "skipped_files": skipped_files,

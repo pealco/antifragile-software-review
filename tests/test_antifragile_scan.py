@@ -552,6 +552,56 @@ UPDATE users SET migrated = true;
         self.assertIn("Review question:", report)
         self.assertIn("Next move:", report)
 
+    def test_critical_flow_candidates_prioritize_trace_starting_points(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_file(
+                root,
+                "app/routes/checkout.py",
+                """
+@app.post("/checkout")
+def checkout(db):
+    try:
+        db.execute("INSERT INTO orders (id) VALUES (1)")
+        requests.post("https://payments.example.test/charge")
+    except Exception: pass
+""",
+            )
+            write_file(
+                root,
+                ".github/workflows/deploy.yml",
+                """
+name: deploy
+on: push
+jobs:
+  deploy:
+    steps:
+      - uses: actions/checkout@v4
+""",
+            )
+            write_file(root, "README.md", "Rollback instructions live in the deploy runbook.\n")
+
+            scan = run_scan(root)
+            report = run_scan_text(root)
+
+        candidates = scan["critical_flow_candidates"]
+        checkout = next(item for item in candidates if item["path"] == "app/routes/checkout.py")
+        deploy = next(item for item in candidates if item["path"] == ".github/workflows/deploy.yml")
+
+        self.assertEqual("request or job critical path", checkout["flow_type"])
+        self.assertEqual(["entrypoint", "state_mutation", "dependency"], checkout["anchor_kinds"][:3])
+        self.assertIn("feedback_delay", checkout["exposure_dimensions"])
+        self.assertIn("python-http-without-timeout", checkout["supporting_patterns"])
+        self.assertIn("Trace from entrypoint to state mutation", checkout["trace_question"])
+        self.assertGreater(checkout["score"], deploy["score"])
+
+        self.assertEqual("ci/release path", deploy["flow_type"])
+        self.assertIn("release_ops", deploy["anchor_kinds"])
+        self.assertIn("github-actions-unpinned-action", deploy["supporting_patterns"])
+        self.assertIn("## Critical Flow Candidates", report)
+        self.assertIn("app/routes/checkout.py", report)
+        self.assertIn("Trace question:", report)
+
 
 if __name__ == "__main__":
     unittest.main()
