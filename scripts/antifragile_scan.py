@@ -215,6 +215,19 @@ class Finding:
     snippet: str
 
 
+@dataclass(frozen=True)
+class RuleInfo:
+    id: str
+    category: str
+    concept: str
+    why: str
+    source_kinds: tuple[str, ...]
+    languages: tuple[str, ...]
+    linter_overlaps: tuple[str, ...]
+    exposure_dimensions: tuple[str, ...]
+    scanner_value: str
+
+
 PATTERNS = [
     Pattern(
         "bare-except",
@@ -558,6 +571,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("repo", nargs="?", default=".", help="Repository path to scan")
     parser.add_argument("--json", action="store_true", help="Emit JSON instead of Markdown")
+    parser.add_argument("--list-rules", action="store_true", help="List scanner rules and exit")
     parser.add_argument(
         "--exclude",
         action="append",
@@ -743,6 +757,169 @@ def exposure_dimensions_for(category: str, dimensions: tuple[str, ...] = ()) -> 
     if dimensions:
         return dimensions
     return EXPOSURE_BY_CATEGORY.get(category, ())
+
+
+CUSTOM_RULES = (
+    RuleInfo(
+        "shell-missing-strict-mode",
+        "Silent failure and lost learning",
+        "skin in the game / feedback",
+        "Shell scripts without strict error handling can continue after failed commands and lose failure evidence.",
+        ("code", "config"),
+        ("shell",),
+        (),
+        exposure_dimensions_for("Silent failure and lost learning"),
+        "Checks a shell-script-level failure mode that line linters may not frame as operational feedback loss.",
+    ),
+    RuleInfo(
+        "github-actions-missing-concurrency",
+        "Cascade and ruin risk",
+        "bounded downside",
+        "Workflows without concurrency controls can overlap deploys or repeated expensive jobs under churn.",
+        ("config",),
+        ("github-actions",),
+        (),
+        exposure_dimensions_for("Cascade and ruin risk"),
+        "Treats workflow concurrency as a blast-radius lead for CI/CD review, not a universal requirement.",
+    ),
+    RuleInfo(
+        "data-change-missing-dry-run",
+        "Irreversibility",
+        "optionality / reversibility",
+        "Data-changing migrations, backfills, and repair scripts need dry-run or preview evidence before touching real state.",
+        ("code", "config"),
+        (),
+        (),
+        exposure_dimensions_for("Irreversibility"),
+        "Feeds the data-ruin review path by finding irreversible operations that lack cheap preflight feedback.",
+    ),
+    RuleInfo(
+        "data-change-missing-checkpoint",
+        "Irreversibility",
+        "optionality / reversibility",
+        "Data-changing migrations, backfills, and repair scripts need checkpoints, batching, or resumability to bound partial failure.",
+        ("code", "config"),
+        (),
+        (),
+        exposure_dimensions_for("Irreversibility"),
+        "Feeds exposure scoring for irreversible data work by surfacing missing resumability evidence.",
+    ),
+    RuleInfo(
+        "retry-without-backoff",
+        "Cascade and ruin risk",
+        "bounded downside / feedback",
+        "Retry paths without backoff, jitter, deadlines, or budgets can amplify dependency stress into a retry storm.",
+        ("code", "config"),
+        (),
+        (),
+        exposure_dimensions_for("Cascade and ruin risk"),
+        "Feeds critical-flow exposure review for superlinear harm under dependency latency or failure.",
+    ),
+    RuleInfo(
+        "kubernetes-missing-resource-limits",
+        "Cascade and ruin risk",
+        "bounded downside",
+        "Kubernetes workloads without resource settings can let one workload consume shared cluster capacity.",
+        ("config",),
+        ("yaml",),
+        (),
+        exposure_dimensions_for("Cascade and ruin risk"),
+        "Surfaces capacity-blast-radius leads; confirm defaults, LimitRanges, and platform policy in context.",
+    ),
+    RuleInfo(
+        "kubernetes-missing-health-probes",
+        "Silent failure and lost learning",
+        "feedback",
+        "Kubernetes workloads without readiness or liveness probes provide weak feedback to schedulers and deploys.",
+        ("config",),
+        ("yaml",),
+        (),
+        exposure_dimensions_for("Silent failure and lost learning"),
+        "Surfaces workload feedback-loop gaps; confirm whether probes are injected or managed elsewhere.",
+    ),
+    RuleInfo(
+        "python-http-without-timeout",
+        "Cascade and ruin risk",
+        "bounded downside",
+        "Outbound calls without explicit timeouts can turn dependency latency into thread or worker exhaustion.",
+        ("code",),
+        ("python",),
+        ("ruff:S113",),
+        ("blast_radius", "dependency_concentration", "feedback_delay"),
+        "Keeps timeout risk in the antifragility report beside non-Python cancellation and cascade signals.",
+    ),
+    RuleInfo(
+        "fetch-without-abort",
+        "Cascade and ruin risk",
+        "bounded downside",
+        "Fetch calls without cancellation can outlive their usefulness under latency or navigation changes.",
+        ("code",),
+        ("javascript", "typescript"),
+        (),
+        ("blast_radius", "dependency_concentration", "feedback_delay"),
+        "Covers browser and JavaScript cancellation risk outside Ruff's Python-only scope.",
+    ),
+)
+
+
+def rule_info_for_pattern(pattern: Pattern) -> RuleInfo:
+    return RuleInfo(
+        id=pattern.id,
+        category=pattern.category,
+        concept=pattern.concept,
+        why=pattern.why,
+        source_kinds=pattern.source_kinds,
+        languages=pattern.languages,
+        linter_overlaps=pattern.linter_overlaps,
+        exposure_dimensions=exposure_dimensions_for(pattern.category, pattern.exposure_dimensions),
+        scanner_value=pattern.scanner_value,
+    )
+
+
+def all_rule_info() -> list[RuleInfo]:
+    return sorted((rule_info_for_pattern(pattern) for pattern in PATTERNS), key=lambda item: item.id) + sorted(
+        CUSTOM_RULES, key=lambda item: item.id
+    )
+
+
+def rule_info_as_dict(rule: RuleInfo) -> dict[str, object]:
+    return {
+        "id": rule.id,
+        "category": rule.category,
+        "concept": rule.concept,
+        "why": rule.why,
+        "source_kinds": list(rule.source_kinds),
+        "languages": list(rule.languages),
+        "linter_overlaps": list(rule.linter_overlaps),
+        "exposure_dimensions": list(rule.exposure_dimensions),
+        "scanner_value": rule.scanner_value,
+    }
+
+
+def rules_markdown(rules: list[RuleInfo]) -> str:
+    lines = [
+        "# Antifragile Scanner Rules",
+        "",
+        f"{len(rules)} rule(s). Empty language lists mean the rule can apply across supported text languages.",
+        "",
+    ]
+    for rule in rules:
+        lines.extend(
+            [
+                f"## {rule.id}",
+                "",
+                f"- Category: {rule.category}",
+                f"- Concept: {rule.concept}",
+                f"- Source kinds: {', '.join(rule.source_kinds)}",
+                f"- Languages: {', '.join(rule.languages) if rule.languages else 'any'}",
+                f"- Exposure dimensions: {', '.join(rule.exposure_dimensions) if rule.exposure_dimensions else 'none'}",
+                f"- Linter overlaps: {', '.join(rule.linter_overlaps) if rule.linter_overlaps else 'none'}",
+                f"- Why it matters: {rule.why}",
+                f"- Scanner value: {rule.scanner_value}",
+                "",
+            ]
+        )
+    return "\n".join(lines).rstrip()
 
 
 def skip_reason(root: Path, path: Path, exclude_globs: list[str], scanner_path: Path) -> str | None:
@@ -1274,6 +1451,15 @@ def markdown_report(result: dict[str, object]) -> str:
 
 def main() -> int:
     args = parse_args()
+
+    if args.list_rules:
+        rules = all_rule_info()
+        if args.json:
+            print(json.dumps({"rule_count": len(rules), "rules": [rule_info_as_dict(rule) for rule in rules]}, indent=2))
+        else:
+            print(rules_markdown(rules))
+        return 0
+
     root = Path(args.repo).expanduser().resolve()
     if not root.exists():
         print(f"error: repo path does not exist: {root}", file=sys.stderr)

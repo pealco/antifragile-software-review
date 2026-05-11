@@ -44,7 +44,44 @@ def run_scan_text(root: Path, *extra_args: str) -> str:
     return result.stdout
 
 
+def run_scanner_json(*args: str) -> dict[str, object]:
+    result = subprocess.run(
+        [sys.executable, str(SCANNER), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return json.loads(result.stdout)
+
+
+def run_scanner_text(*args: str) -> str:
+    result = subprocess.run(
+        [sys.executable, str(SCANNER), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout
+
+
 class AntifragileScanTest(unittest.TestCase):
+    def test_list_rules_outputs_rule_metadata_without_repo_scan(self) -> None:
+        rules = run_scanner_json("--list-rules", "--json")
+        report = run_scanner_text("--list-rules")
+        rules_by_id = {rule["id"]: rule for rule in rules["rules"]}
+
+        self.assertGreater(rules["rule_count"], 30)
+        self.assertIn("python-http-without-timeout", rules_by_id)
+        self.assertEqual(["ruff:S113"], rules_by_id["python-http-without-timeout"]["linter_overlaps"])
+        self.assertEqual(
+            ["blast_radius", "dependency_concentration", "feedback_delay"],
+            rules_by_id["python-http-without-timeout"]["exposure_dimensions"],
+        )
+        self.assertIn("data-change-missing-dry-run", rules_by_id)
+        self.assertIn("github-actions-missing-concurrency", rules_by_id)
+        self.assertIn("# Antifragile Scanner Rules", report)
+        self.assertIn("## data-change-missing-dry-run", report)
+
     def test_detects_code_findings_without_turning_docs_into_findings(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -63,6 +63,7 @@ Useful scanner controls:
 
 ```bash
 python3 "${CLAUDE_SKILL_DIR}/scripts/antifragile_scan.py" /path/to/repo --exclude 'fixtures/**'
+python3 "${CLAUDE_SKILL_DIR}/scripts/antifragile_scan.py" --list-rules
 ```
 
 Add `antifragile-scan: ignore` or `antifragile-scan: ignore[pattern-id]` on a line only when the signal is intentionally reviewed and harmless.

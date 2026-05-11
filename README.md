@@ -177,6 +177,13 @@ Limit findings per rule:
 python3 scripts/antifragile_scan.py . --max-per-pattern 20 --max-file-bytes 2000000
 ```
 
+List rule metadata, including rule ids, categories, linter overlaps, and exposure dimensions:
+
+```bash
+python3 scripts/antifragile_scan.py --list-rules
+python3 scripts/antifragile_scan.py --list-rules --json
+```
+
 ### Suppress Reviewed Signals
 
 Use inline suppression only after reviewing the signal and deciding it is harmless in context.
