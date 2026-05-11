@@ -14,6 +14,8 @@ This repository contains:
 - `references/review-playbook.md`: the system-level review method for architecture, operations, release, data, dependency, testing, and incident-learning analysis.
 - `references/evaluation-scenarios.md`: representative behavior checks for keeping the skill architecture-first, evidence-driven, and resistant to scanner overfitting.
 - `scripts/antifragile_scan.py`: a dependency-free Python scanner that surfaces review leads across several languages, runtimes, and infrastructure files.
+- `templates/review-scorecard.md`: a reusable scorecard for critical-flow traces, exposure scoring, and findings.
+- `evals/`: executable fixture checks for the highest-value skill behaviors.
 
 The scanner is deliberately secondary. It helps discover concrete code smells and review leads, but the skill's main value is broader architectural, operational, and design analysis.
 
@@ -276,7 +278,7 @@ The skill favors:
 
 The Markdown report includes:
 
-- project signals: tests, CI, migration hints, and operational term counts by source type,
+- project signals: tests, CI, migration, runbook, incident-artifact, and operational term counts by source type,
 - language counts by detected language or file family,
 - mention locations for rollback, canary, observability, incident-learning, and fault-experiment terms,
 - skipped file samples caused by size, binary content, read errors, explicit excludes, or self-scan rules,
@@ -303,8 +305,8 @@ The scanner currently looks for code and configuration leads in these areas:
 
 - Silent failure and lost learning: bare `except`, swallowed exceptions, empty catches, ignored errors.
 - Prediction and timing dependence: fixed sleeps, magic timeout constants, impossible assumptions.
-- Cascade and ruin risk: process aborts, unbounded loops, outbound HTTP calls without timeouts, fetch calls without cancellation.
-- Irreversibility: destructive database or infrastructure commands, forced confirmation flags.
+- Cascade and ruin risk: process aborts, unbounded loops and queues, retry paths without backoff, outbound HTTP calls without timeouts, fetch calls without cancellation.
+- Irreversibility: destructive database or infrastructure commands, forced confirmation flags, data changes without dry-run or checkpoint evidence.
 - Centralized state and tight coupling: global mutable state, singleton access, hard-coded endpoints.
 - Weak observability: ad hoc debug prints where structured logging or metrics might be missing.
 - Known fragility markers: TODO, FIXME, HACK, workaround, temporary.
@@ -359,6 +361,9 @@ The scanner should not try to become a meta-linter. It should surface review lea
 |-- LICENSE
 |-- agents/
 |   `-- openai.yaml
+|-- evals/
+|   |-- fixtures/
+|   `-- run_evals.py
 |-- .github/
 |   `-- workflows/
 |       `-- test.yml
@@ -368,6 +373,8 @@ The scanner should not try to become a meta-linter. It should surface review lea
 |   `-- review-playbook.md
 |-- scripts/
 |   `-- antifragile_scan.py
+|-- templates/
+|   `-- review-scorecard.md
 `-- tests/
     `-- test_antifragile_scan.py
 ```
@@ -386,10 +393,16 @@ Run the scanner against this repository:
 python3 scripts/antifragile_scan.py .
 ```
 
+Run executable skill behavior fixtures:
+
+```bash
+python3 evals/run_evals.py
+```
+
 Check Python syntax:
 
 ```bash
-python3 -m py_compile scripts/antifragile_scan.py tests/test_antifragile_scan.py
+python3 -m py_compile scripts/antifragile_scan.py tests/test_antifragile_scan.py tests/test_evaluation_scenarios.py evals/run_evals.py
 ```
 
 The self-scan intentionally skips `scripts/antifragile_scan.py` as `self-scanner` so the scanner's own pattern definitions do not dominate the report.
@@ -421,8 +434,9 @@ Contributions are welcome. Useful contributions include:
 Before opening a change, run:
 
 ```bash
-python3 -m py_compile scripts/antifragile_scan.py tests/test_antifragile_scan.py
+python3 -m py_compile scripts/antifragile_scan.py tests/test_antifragile_scan.py tests/test_evaluation_scenarios.py evals/run_evals.py
 python3 -m unittest discover -s tests
+python3 evals/run_evals.py
 python3 scripts/antifragile_scan.py .
 ```
 

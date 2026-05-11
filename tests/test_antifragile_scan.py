@@ -114,6 +114,17 @@ while True:  # antifragile-scan: ignore
         self.assertEqual([], scan["findings"])
         self.assertEqual([{"path": "bad.py", "reason": "excluded:bad.py"}], scan["skipped_files"])
 
+    def test_default_skips_fixture_directories_but_can_scan_fixture_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_file(root, "fixtures/bad.py", "while True:\n    pass\n")
+
+            scan_root = run_scan(root)
+            scan_fixture = run_scan(root / "fixtures")
+
+        self.assertEqual([], scan_root["findings"])
+        self.assertEqual(["unbounded-loop"], [finding["pattern_id"] for finding in scan_fixture["findings"]])
+
     def test_self_scan_skips_the_scanner_implementation(self) -> None:
         scan = run_scan(ROOT)
 
@@ -426,6 +437,55 @@ sleep 1
         ))
         self.assertIn("github-actions:", report)
         self.assertIn("terraform:", report)
+
+    def test_targeted_exposure_model_leads(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_file(
+                root,
+                "scripts/backfill_accounts.py",
+                """
+import asyncio
+
+jobs = asyncio.Queue()
+
+def retry_charge(account):
+    return retry(account)
+
+def run(db):
+    for account in db.accounts():
+        db.execute("UPDATE accounts SET migrated = true")
+""",
+            )
+            write_file(
+                root,
+                "db/migrations/001_drop_legacy_tokens.sql",
+                """
+ALTER TABLE users DROP COLUMN legacy_token;
+UPDATE users SET migrated = true;
+""",
+            )
+            write_file(root, "docs/incidents/2026-01-billing.md", "Postmortem: repeated billing failure.\n")
+            write_file(root, "docs/runbooks/billing.md", "Runbook for billing incidents.\n")
+
+            scan = run_scan(root)
+            report = run_scan_text(root)
+
+        patterns = {finding["pattern_id"] for finding in scan["findings"]}
+        self.assertTrue(
+            {
+                "data-change-missing-dry-run",
+                "data-change-missing-checkpoint",
+                "retry-without-backoff",
+                "unbounded-queue",
+                "sql-destructive-schema",
+                "sql-update-without-where",
+            }.issubset(patterns)
+        )
+        self.assertEqual(1, scan["project_signals"]["incident_file_count"])
+        self.assertEqual(1, scan["project_signals"]["runbook_file_count"])
+        self.assertIn("Incident artifacts detected: 1", report)
+        self.assertIn("Runbook files detected: 1", report)
 
 
 if __name__ == "__main__":

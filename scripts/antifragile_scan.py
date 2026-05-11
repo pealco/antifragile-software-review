@@ -28,6 +28,7 @@ SKIP_DIRS = {
     "node_modules",
     "bower_components",
     "vendor",
+    "fixtures",
     "dist",
     "build",
     "coverage",
@@ -112,6 +113,18 @@ TEST_DIR_NAMES = {"__tests__", "spec", "test", "tests"}
 
 INLINE_IGNORE_RE = re.compile(r"antifragile-scan:\s*ignore(?:\[([^\]]+)\])?", re.IGNORECASE)
 SOURCE_KINDS = ("code", "config", "docs", "tests")
+DATA_CHANGE_PATH_RE = re.compile(r"(^|/)(migrations?|backfills?|data[-_]?migrations?|repairs?|scripts?)(/|$)|backfill|migration|repair", re.IGNORECASE)
+DATA_MUTATION_RE = re.compile(
+    r"\b(ALTER\s+TABLE|DROP\s+(TABLE|COLUMN|DATABASE|SCHEMA|INDEX|TYPE|VIEW)|TRUNCATE\s+TABLE|DELETE\s+FROM|UPDATE\s+\S+\s+SET|INSERT\s+INTO|bulk_update|update_all|delete_all|destroy_all|save!)\b",
+    re.IGNORECASE,
+)
+DATA_DRY_RUN_RE = re.compile(r"\b(dry[-_ ]?run|preview|noop|no-op|plan|--check)\b", re.IGNORECASE)
+DATA_CHECKPOINT_RE = re.compile(
+    r"\b(checkpoint|resume|resumable|cursor|batch|limit|page_size|chunk|idempotent|upsert|ON\s+CONFLICT)\b",
+    re.IGNORECASE,
+)
+RETRY_RE = re.compile(r"\b(retry|retries|retried|retrying)\b", re.IGNORECASE)
+RETRY_BOUND_RE = re.compile(r"\b(backoff|jitter|budget|deadline|max[-_ ]?retries|max[-_ ]?attempts|retry[-_ ]?budget|exponential|sleep|delay|timeout)\b", re.IGNORECASE)
 
 LANGUAGE_BY_SUFFIX = {
     ".c": "c",
@@ -265,6 +278,14 @@ PATTERNS = [
         r"^\s*(while\s+True|for\s*\(\s*;\s*;\s*\)|loop\s*\{)",
         "Unbounded loops need cancellation, backoff, budgets, or visible liveness signals.",
         scanner_value="Looks for unbounded loop forms across Python, JavaScript, TypeScript, C-style languages, and Rust.",
+    ),
+    Pattern(
+        "unbounded-queue",
+        "Cascade and ruin risk",
+        "redundancy and slack",
+        r"\b(queue\.Queue|asyncio\.Queue|multiprocessing\.Queue)\s*\(\s*\)|\bChannel\.UNLIMITED\b|\bnew\s+ArrayBlockingQueue\s*\(\s*Integer\.MAX_VALUE\s*\)",
+        "Unbounded queues can convert traffic spikes into memory pressure, feedback delay, and retry cascades.",
+        scanner_value="Feeds exposure scoring for slack and backpressure review; confirm producer and consumer bounds in context.",
     ),
     Pattern(
         "destructive-action",
@@ -849,6 +870,44 @@ def custom_file_findings(
             snippet,
         )
 
+    rel = rel_path(path, root)
+    if DATA_CHANGE_PATH_RE.search(rel) and DATA_MUTATION_RE.search(text):
+        mutation_match = first_matching_line(text, DATA_MUTATION_RE.pattern) or first_nonempty_line(text)
+        line_number, snippet = mutation_match
+        if not DATA_DRY_RUN_RE.search(text):
+            add(
+                "data-change-missing-dry-run",
+                "Irreversibility",
+                "optionality / reversibility",
+                "Data-changing migrations, backfills, and repair scripts need dry-run or preview evidence before touching real state.",
+                "Feeds the data-ruin review path by finding irreversible operations that lack cheap preflight feedback.",
+                line_number,
+                snippet,
+            )
+        if not DATA_CHECKPOINT_RE.search(text):
+            add(
+                "data-change-missing-checkpoint",
+                "Irreversibility",
+                "optionality / reversibility",
+                "Data-changing migrations, backfills, and repair scripts need checkpoints, batching, or resumability to bound partial failure.",
+                "Feeds exposure scoring for irreversible data work by surfacing missing resumability evidence.",
+                line_number,
+                snippet,
+            )
+
+    retry_match = first_matching_line(text, RETRY_RE.pattern)
+    if retry_match and not RETRY_BOUND_RE.search(text):
+        line_number, snippet = retry_match
+        add(
+            "retry-without-backoff",
+            "Cascade and ruin risk",
+            "bounded downside / feedback",
+            "Retry paths without backoff, jitter, deadlines, or budgets can amplify dependency stress into a retry storm.",
+            "Feeds critical-flow exposure review for superlinear harm under dependency latency or failure.",
+            line_number,
+            snippet,
+        )
+
     workload_match = first_matching_line(text, r"^\s*kind\s*:\s*(Deployment|StatefulSet|DaemonSet)\s*$")
     if language == "yaml" and workload_match:
         kind_line, kind_snippet = workload_match
@@ -993,6 +1052,12 @@ def detect_project_signals(root: Path, files: list[Path], texts: dict[Path, str]
     ]
 
     migration_files = [rel for rel in rels if "migration" in rel or "/migrate/" in rel or "/migrations/" in rel]
+    incident_files = [
+        rel
+        for rel in rels
+        if "incident" in rel or "postmortem" in rel or "post-mortem" in rel
+    ]
+    runbook_files = [rel for rel in rels if "runbook" in rel]
     term_counts, term_counts_by_source, term_locations = term_evidence(root, texts)
 
     return {
@@ -1003,6 +1068,10 @@ def detect_project_signals(root: Path, files: list[Path], texts: dict[Path, str]
         "ci_files": ci_files[:10],
         "language_file_counts": language_file_counts(files),
         "migration_file_count": len(migration_files),
+        "incident_file_count": len(incident_files),
+        "incident_files": incident_files[:10],
+        "runbook_file_count": len(runbook_files),
+        "runbook_files": runbook_files[:10],
         "term_counts": term_counts,
         "term_counts_by_source": term_counts_by_source,
         "term_locations": term_locations,
@@ -1088,6 +1157,8 @@ def markdown_report(result: dict[str, object]) -> str:
             f"- CI present: {'yes' if signals['ci_present'] else 'not detected'}",
             f"- Languages scanned: {format_language_counts(signals['language_file_counts'])}",
             f"- Migration files detected: {signals['migration_file_count']}",
+            f"- Incident artifacts detected: {signals['incident_file_count']}",
+            f"- Runbook files detected: {signals['runbook_file_count']}",
             f"- Rollback/dry-run mentions: {rollback_total} ({format_source_counts(rollback_by_source)})",
             f"- Feature flag/canary mentions: {rollout_total} ({format_source_counts(rollout_by_source)})",
             f"- Chaos/fault experiment mentions: {chaos_total} ({format_source_counts(chaos_by_source)})",

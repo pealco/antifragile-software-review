@@ -11,7 +11,7 @@ argument-hint: "[repo-path or focus]"
 
 Inspect the codebase for architectural and operational design choices that are harmed by volatility, uncertainty, stress, errors, growth, incidents, or changing requirements. Produce concrete findings and changes that help the system gain information, options, or safety from small failures instead of merely surviving them.
 
-Load `references/review-playbook.md` for the review method. Load `references/antifragility-primer.md` when you need the conceptual mapping from Taleb's ideas to software design. When changing this skill, use `references/evaluation-scenarios.md` as the behavior checklist.
+Load `references/review-playbook.md` for the review method. Load `references/antifragility-primer.md` when you need the conceptual mapping from Taleb's ideas to software design. Use `templates/review-scorecard.md` when the user wants a reusable review artifact or when a compact scorecard would make findings easier to compare. When changing this skill, use `references/evaluation-scenarios.md` and `evals/run_evals.py` as the behavior checklist.
 
 Claude Code compatibility:
 - The skill can be invoked directly as `/antifragile-software-review [repo-path or focus]`; treat any provided arguments as the target repository, review scope, or implementation focus.
@@ -109,7 +109,7 @@ Add `antifragile-scan: ignore` or `antifragile-scan: ignore[pattern-id]` on a li
 
 ## Output Format
 
-Start with the architectural thesis, then findings. Do not let scanner output dominate the review. Use this shape:
+Start with the architectural thesis, then findings. Do not let scanner output dominate the review. For a reusable artifact, follow `templates/review-scorecard.md`. Otherwise use this shape:
 
 ```markdown
 ## Antifragility Thesis
