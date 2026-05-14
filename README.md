@@ -6,6 +6,29 @@ A Codex and Claude Code skill for reviewing software through an antifragility le
 
 The goal is not to make code "perfect" or eliminate all failure. The goal is to help a codebase gain from small shocks, cheap experiments, fast reversals, rich feedback, and bounded downside.
 
+## What It Does
+
+Antifragile Software Review gives an agent a structured way to review a repository for design choices that get worse under stress. It asks the agent to build a system map, identify critical flows, trace at least one high-exposure path, score fragility exposure, and recommend changes that turn failures into learning, optionality, or smaller blast radius.
+
+In practice, the skill helps find questions like:
+
+- What happens when a dependency is slow, unavailable, or changes behavior?
+- Which migrations, backfills, deletes, or external side effects are hard to reverse?
+- Where do errors disappear without metrics, alerts, ownership, or regression tests?
+- Which deploy, CI, rollback, or release paths can overlap, drift, or fail silently?
+- Where is a proposed abstraction adding optionality, and where is it just extra coupling?
+- Which incident notes, runbooks, tests, and dashboards prove that past failures made the system better?
+
+It is useful when you want to:
+
+- audit a codebase or architecture for fragility risks,
+- choose the first critical flow to investigate in an unfamiliar repo,
+- convert vague reliability concerns into evidence-backed findings,
+- rank recommendations by blast radius, irreversibility, feedback delay, dependency concentration, and ruin potential,
+- implement small reversible improvements with validation, instead of producing a generic best-practices checklist.
+
+This is different from a linter. Linters are excellent at local correctness, style, security rules, and language-specific best practices. This skill is concerned with system behavior under stress: coupling, recovery, reversibility, observability, deployment safety, dependency optionality, and whether incidents create durable learning. The included scanner is only a discovery aid; it points the agent toward likely review leads and critical-flow candidates, but the final judgment should come from reading the relevant code, config, tests, and operational artifacts in context.
+
 ## What It Includes
 
 This repository contains:
