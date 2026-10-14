@@ -51,6 +51,7 @@
 - Reversibility:
 - Stress response curve:
 - Antifragile move:
+- Invariant (the rule the control protects, stated as harm):
 - Control strength (today, after the move, required):
 - Gain mechanism:
 - Robust vs antifragile delta:

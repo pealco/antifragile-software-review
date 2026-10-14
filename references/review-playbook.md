@@ -139,6 +139,8 @@ Required strength:
 
 If an agent or other automation can trigger the action repeatedly, raise the requirement by one level, up to C5: per-action risk compounds with the number of actions, and written instructions are not reliable controls for agents. Report the gap (required minus effective).
 
+Protect the invariant, not the instance. State the rule a control enforces in terms of the harm (at most one charge per order; no deletion without a retention period), and put the control where every path to that harm must pass, usually shared state: a unique claim recorded before the side effect, a constraint, or one gateway that owns the side effect. Rate a control per path. A control on the path where the bug was found is C4 or C5 for that path and C0 for every other path, including paths a later change adds.
+
 Audit every control the review relies on:
 
 1. A challenge test exists and runs automatically.

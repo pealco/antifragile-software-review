@@ -109,6 +109,7 @@ Add `antifragile-scan: ignore` or `antifragile-scan: ignore[pattern-id]` on a li
 10. In implementation mode, close the loop.
    - Patch one or more small, high-leverage changes that bound downside or create learning.
    - Add validation that will fail if the fragility comes back: regression tests, scanner tests, CI checks, metrics assertions, dry-run checks, or documented verification commands.
+   - Protect the invariant, not the instance. Name the rule the bug broke in terms of the harm (for example "at most one charge per order" or "no production write from a development credential"), not the line where you found it. Enforce the rule at the point every path to the harm must pass, usually shared state: a record claimed under a unique key before the side effect, a database constraint, or one gateway function that owns the side effect. A fix on the path where you found the bug protects only that path; a later change can add another path to the same harm and skip it. Where you can, make the challenge test reach the harm through a path other than the one you fixed.
    - When the patch adds a control, add its challenge test: a test that feeds the known-bad case (for example the input one past the limit, or the exact command an operator would run) and asserts the control rejects it. Confirm it fails on the original code and passes on the patched code. Keep a known-good case passing too, so the control does not block correct work.
    - Re-run the relevant tests, scanner, and format/lint commands. If validation cannot run, say exactly what blocked it.
    - Report what changed, what now catches regressions, and any remaining higher-risk backlog items.
@@ -160,6 +161,7 @@ Start with the architectural thesis, then findings. Do not let scanner output do
   Reversibility: how easy the proposed move is to roll back or bound.
   Stress response curve: capped / linear / superlinear / convex.
   Antifragile move: concrete change that bounds downside and creates learning/options.
+  Invariant: the rule the control protects, stated as harm (for example at most one charge per order).
   Control strength: today Cn, proven or unproven -> after the move Cm, with its challenge test; required Ck.
   Gain mechanism: faster learning / smaller blast radius / cheaper reversal / safer experimentation / dependency optionality / incident-to-test conversion.
   Robust vs antifragile delta: why this produces feedback, optionality, or safer stress rather than only durability.
