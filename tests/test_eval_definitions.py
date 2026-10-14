@@ -83,5 +83,19 @@ class OutputEvalsTest(unittest.TestCase):
         self.assertTrue(KNOWN_CHECKS <= implemented, KNOWN_CHECKS - implemented)
 
 
+
+class AgentTrapsTest(unittest.TestCase):
+    def test_traps_point_at_a_harden_case_and_known_challenges(self) -> None:
+        traps = json.loads((ROOT / "evals" / "agent_traps.json").read_text())
+        spec = json.loads((ROOT / "evals" / "evals.json").read_text())
+        case = next(c for c in spec["evals"] if c["id"] == traps["harden_case"])
+        self.assertEqual("implementation", case["mode"])
+        self.assertEqual(traps["fixture"], case["fixture"])
+        for name in traps["challenges"]:
+            self.assertIn(f"challenge:{name}", case["checks"])
+        ids = [t["id"] for t in traps["tasks"]]
+        self.assertEqual(len(ids), len(set(ids)))
+
+
 if __name__ == "__main__":
     unittest.main()

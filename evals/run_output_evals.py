@@ -80,7 +80,9 @@ def make_project(case: dict, skill_dir: Path | None, skill_name: str) -> Path:
     project = Path(tempfile.mkdtemp(prefix="output-eval-"))
     shutil.copytree(FIXTURES / case["fixture"], project, dirs_exist_ok=True)
     git(project, "init", "-q")
-    (project / ".git" / "info" / "exclude").write_text(".claude/\n", encoding="utf-8")
+    (project / ".git" / "info" / "exclude").write_text(
+        ".claude/\n__pycache__/\n", encoding="utf-8"
+    )
     git(project, "add", "-A")
     git(project, "commit", "-q", "-m", "fixture")
     if skill_dir:

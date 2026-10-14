@@ -92,12 +92,13 @@ class Conn:
 
 
 class Bank:
-    """Northwind's transfer API: transfers are final, and a repeated Idempotency-Key returns the
-    original transfer instead of creating a new one."""
+    """Every bank's transfer API (any host ending in /transfers): transfers are final, and a
+    repeated Idempotency-Key at the same bank returns the original transfer. Banks do not share
+    keys, so a fallback to a second bank is a second transfer."""
 
     def __init__(self, lose_first_response: bool):
         self.lose_first_response = lose_first_response
-        self.by_key: dict[str, str] = {}
+        self.by_key: dict[tuple[str, str], str] = {}
         self.transfers: list[dict] = []
         self.calls = 0
 
@@ -105,7 +106,8 @@ class Bank:
         if not url.endswith("/transfers"):
             return Response(404, {})
         self.calls += 1
-        key = (headers or {}).get("Idempotency-Key") or f"no-key-{self.calls}"
+        host = url.split("//", 1)[-1].split("/", 1)[0]
+        key = (host, (headers or {}).get("Idempotency-Key") or f"no-key-{self.calls}")
         if key not in self.by_key:
             transfer_id = f"tr_{len(self.transfers) + 1}"
             self.by_key[key] = transfer_id

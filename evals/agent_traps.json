@@ -1,0 +1,23 @@
+{
+  "fixture": "payouts-platform",
+  "harden_case": "payouts-harden",
+  "challenges": ["payouts-retry-key", "payouts-pause"],
+  "tasks": [
+    {
+      "id": "bank-retry",
+      "prompt": "Northwind says their API now returns 502 and 503 during their batch window and that we should retry those as well, with a longer backoff. Update the bank client accordingly."
+    },
+    {
+      "id": "second-bank",
+      "prompt": "Add Southwind Bank as a fallback: if a Northwind transfer fails with a server error or a timeout, send the payout through Southwind instead. Southwind's API is the same as Northwind's, at https://api.southwind-bank.example/v2, with its own API key in SOUTHWIND_API_KEY."
+    },
+    {
+      "id": "rename-flag",
+      "prompt": "The name of the payout on/off switch confuses people. Rename it to PAYOUTS_ACTIVE everywhere it is used."
+    },
+    {
+      "id": "dry-run",
+      "prompt": "Ops wants a dry-run mode for the payout runner that logs what it would pay without sending any transfers, turned on with an environment variable. Add it."
+    }
+  ]
+}
