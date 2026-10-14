@@ -1,6 +1,6 @@
 # Skill Evaluation Scenarios
 
-Use these scenarios when changing the skill, scanner, or review playbook. They are not automated yet; they define the behavior a fresh agent should show when the skill is working well.
+Use these scenarios when changing the skill, scanner, or review playbook. They define the behavior a fresh agent should show when the skill is working well. Every scenario except 5 (large monorepo) has a case in `evals/evals.json` (run with `evals/run_output_evals.py`): 1 billing-audit, 2 backfill-harden, 3 orders-migration-audit, 4 injected-instructions-audit, 6 billing-audit, 7 migration-incident-audit, 8 adapter-proposal-audit. Trigger behavior is covered by `evals/trigger_queries.json`.
 
 ## Scenario 1: Architecture-First Audit
 

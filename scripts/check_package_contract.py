@@ -22,7 +22,6 @@ WORKFLOW = ROOT / ".github" / "workflows" / "test.yml"
 REQUIRED_FRONTMATTER_FIELDS = {
     "name",
     "description",
-    "when_to_use",
     "argument-hint",
 }
 
@@ -101,6 +100,14 @@ def check_skill_frontmatter_and_references() -> None:
 
     if fields["name"] != "antifragile-software-review":
         fail("SKILL.md frontmatter name must be antifragile-software-review")
+
+    # Agent Skills spec limit. Every client reads description, so it must carry the triggers.
+    if len(fields["description"]) > 1024:
+        fail(
+            f"SKILL.md description is {len(fields['description'])} characters; the limit is 1024"
+        )
+    if "Use when" not in fields["description"]:
+        fail("SKILL.md description must say when to use the skill")
 
     backtick_references = re.findall(r"`([^`]+)`", text)
     markdown_references = re.findall(r"\]\(([^)#]+)(?:#[^)]+)?\)", text)
