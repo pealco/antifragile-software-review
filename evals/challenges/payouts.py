@@ -26,6 +26,7 @@ from pathlib import Path
 CHALLENGES = {
     "payouts-pause": "the pause command in docs/runbooks/payouts.md stops the payout run",
     "payouts-retry-key": "a bank timeout after the bank accepted a transfer does not pay the seller twice",
+    "payouts-lost-responses": "when the bank accepts every attempt but no response arrives, the seller is paid once",
 }
 
 
@@ -96,8 +97,9 @@ class Bank:
     repeated Idempotency-Key at the same bank returns the original transfer. Banks do not share
     keys, so a fallback to a second bank is a second transfer."""
 
-    def __init__(self, lose_first_response: bool):
-        self.lose_first_response = lose_first_response
+    def __init__(self, lose: str = "none"):
+        self.lose = lose  # "none", "first" (one response), or "primary" (every response from the first bank)
+        self.primary: str | None = None
         self.by_key: dict[tuple[str, str], str] = {}
         self.transfers: list[dict] = []
         self.calls = 0
@@ -107,12 +109,15 @@ class Bank:
             return Response(404, {})
         self.calls += 1
         host = url.split("//", 1)[-1].split("/", 1)[0]
+        self.primary = self.primary or host
         key = (host, (headers or {}).get("Idempotency-Key") or f"no-key-{self.calls}")
         if key not in self.by_key:
             transfer_id = f"tr_{len(self.transfers) + 1}"
             self.by_key[key] = transfer_id
             self.transfers.append({"id": transfer_id, "key": key, **(json or {})})
-        if self.lose_first_response and self.calls == 1:
+        if (self.lose == "first" and self.calls == 1) or (
+            self.lose == "primary" and host == self.primary
+        ):
             raise sys.modules["requests"].Timeout(
                 "read timed out"
             )  # accepted, response lost
@@ -209,7 +214,11 @@ def simulate(scenario: str, project: Path) -> dict:
     import os
     import runpy
 
-    bank = Bank(lose_first_response=scenario == "timeout-after-accept")
+    bank = Bank(
+        {"timeout-after-accept": "first", "all-responses-lost": "primary"}.get(
+            scenario, "none"
+        )
+    )
     install_stubs(bank)
     os.chdir(project)
     sys.path.insert(0, str(project))
@@ -227,16 +236,36 @@ def simulate(scenario: str, project: Path) -> dict:
 # --- parent process: build the environment, run scenarios, judge ---------------------------
 
 
+CREDENTIAL = re.compile(r"_(API_KEY|KEY|TOKEN|SECRET|PASSWORD)$")
+
+
 def manifest_env(project: Path) -> dict[str, str]:
-    """Plain `name`/`value` env pairs from the payout CronJob manifest."""
+    """The environment the payout CronJob runs with in production: plain `name`/`value` pairs
+    from its manifest, plus a dummy value for every credential. A credential is a manifest entry
+    backed by a secret, or a `*_API_KEY`, `*_TOKEN`, `*_SECRET` or `*_PASSWORD` variable the code
+    reads. Leaving credentials unset would silently disable code paths (such as a fallback bank)
+    that production runs."""
+    env: dict[str, str] = {}
+    for name in sorted(set(re.findall(r"""(?:environ\.get|environ\[|getenv)\(?\s*["']([A-Z][A-Z0-9_]*)["']""",
+                                      "\n".join(f.read_text(encoding="utf-8", errors="replace")
+                                                for f in project.rglob("*.py") if "tests" not in f.parts)))):  # fmt: skip
+        if CREDENTIAL.search(name):
+            env[name] = "test-credential"
     path = project / "deploy" / "k8s" / "payout-cronjob.yaml"
-    if not path.is_file():
-        return {}
-    text = path.read_text(encoding="utf-8")
-    pairs = re.findall(
-        r"-\s*name:\s*([A-Za-z_][A-Za-z0-9_]*)\s*\n\s*value:\s*\"?([^\"\n]*)\"?", text
-    )
-    return dict(pairs)
+    if path.is_file():
+        text = path.read_text(encoding="utf-8")
+        for name in re.findall(
+            r"-\s*name:\s*([A-Za-z_][A-Za-z0-9_]*)\s*\n\s*valueFrom:", text
+        ):
+            env[name] = "test-credential"
+        env.update(
+            re.findall(
+                r"-\s*name:\s*([A-Za-z_][A-Za-z0-9_]*)\s*\n\s*value:\s*\"?([^\"\n]*)\"?",
+                text,
+            )
+        )
+    env.pop("DATABASE_URL", None)  # the stub database ignores it
+    return env
 
 
 def runbook_pause(project: Path) -> tuple[str, dict[str, str]]:
@@ -266,7 +295,8 @@ def run_scenario(scenario: str, project: Path, env: dict[str, str]) -> dict:
     child_env = {
         k: v
         for k, v in os.environ.items()
-        if not k.upper().startswith(("PAYOUT", "NORTHWIND"))
+        if not k.upper().startswith(("PAYOUT", "NORTHWIND", "SOUTHWIND"))
+        and not CREDENTIAL.search(k.upper())
     }
     child_env.update(env)
     done = subprocess.run(
@@ -302,6 +332,12 @@ def check(name: str, project: Path) -> tuple[bool, str]:
         lost = run_scenario("timeout-after-accept", project, base)
         ok = lost["transfers"] == 1
         return ok, f"bank accepted, first response lost: {lost}"
+    if (
+        name == "payouts-lost-responses"
+    ):  # e.g. a fallback bank after a timeout pays a second time
+        lost = run_scenario("all-responses-lost", project, base)
+        ok = lost["transfers"] == 1
+        return ok, f"first bank accepted every attempt, no response arrived: {lost}"
     raise SystemExit(f"error: unknown challenge {name}")
 
 

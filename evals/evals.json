@@ -163,6 +163,7 @@
         "python_compiles",
         "tests_changed",
         "challenge:payouts-retry-key",
+        "challenge:payouts-lost-responses",
         "challenge:payouts-pause"
       ],
       "assertions": [

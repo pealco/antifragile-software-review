@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import subprocess
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
@@ -49,11 +50,12 @@ def harden(
     )  # later agents get no skill
     out.git(project, "add", "-A")
     out.git(project, "commit", "-q", "--allow-empty", "-m", "hardening")
+    patch = out.git(project, "diff", "--binary", "HEAD~1", "HEAD")
     repo = keep / f"{config}-{index}"
     shutil.move(str(project), repo)
     return {
         "config": config, "run": index, "repo": str(repo), "error": run["error"], "cost": run["cost"],
-        "challenges": challenges(repo, args.challenge_names),
+        "challenges": challenges(repo, args.challenge_names), "patch": patch,
     }  # fmt: skip
 
 
@@ -65,15 +67,63 @@ def change(job: tuple[dict, dict, int], args: argparse.Namespace) -> dict:
         case = {"prompt": task["prompt"], "mode": "implementation"}
         run = out.run_agent(case, project, False, args.task_model, args.budget)
         after = challenges(project, args.challenge_names)
+        out.git(project, "add", "-A")
+        patch = out.git(project, "diff", "--binary", "--cached", "HEAD")
         return {
             "config": hardened["config"], "hardened_run": hardened["run"], "task": task["id"],
             "run": index, "error": run["error"], "cost": run["cost"],
             "changed": out.changed_files(project), "before": hardened["challenges"], "after": after,
             "regressed": [n for n, ok in hardened["challenges"].items() if ok and not after[n]],
-            "final_text": run["final_text"],
+            "final_text": run["final_text"], "patch": patch,
         }  # fmt: skip
     finally:
         shutil.rmtree(project.parent, ignore_errors=True)
+
+
+def rebuild(patches: list[str], dest: Path) -> Path:
+    """The fixture with the saved hardening and task patches applied, for regrading."""
+    fixture = out.FIXTURES / json.loads(TRAPS.read_text(encoding="utf-8"))["fixture"]
+    shutil.copytree(fixture, dest)
+    out.git(dest, "init", "-q")
+    for patch in patches:
+        if patch.strip():
+            subprocess.run(["git", "apply", "--whitespace=nowarn", "-"], input=patch, text=True,
+                           cwd=dest, check=True, capture_output=True)  # fmt: skip
+    return dest
+
+
+def regrade(results_dir: Path, names: list[str]) -> int:
+    """Re-run the challenges on saved patches, with no model calls. Use after a challenge changes."""
+    data = json.loads((results_dir / "results.json").read_text(encoding="utf-8"))
+    by_repo = {(h["config"], h["run"]): h for h in data["hardened"]}
+    with tempfile.TemporaryDirectory(prefix="regrade-") as tmp:
+        for i, h in enumerate(data["hardened"]):
+            h["challenges"] = challenges(
+                rebuild([h["patch"]], Path(tmp) / f"h{i}"), names
+            )
+        for i, c in enumerate(data["changes"]):
+            h = by_repo[(c["config"], c["hardened_run"])]
+            c["before"] = h["challenges"]
+            c["after"] = challenges(
+                rebuild([h["patch"], c["patch"]], Path(tmp) / f"c{i}"), names
+            )
+            c["regressed"] = [
+                n for n, ok in c["before"].items() if ok and not c["after"][n]
+            ]
+    summary = summarize(data["hardened"], data["changes"], names)
+    print(json.dumps(summary, indent=2))
+    for r in data["changes"]:
+        if r["regressed"]:
+            print(
+                f"regressed: {r['config']} hardened#{r['hardened_run']} task={r['task']}: {r['regressed']}"
+            )
+    (results_dir / "results.regraded.json").write_text(
+        json.dumps(data, indent=2) + "\n"
+    )
+    (results_dir / "summary.regraded.json").write_text(
+        json.dumps(summary, indent=2) + "\n"
+    )
+    return 0
 
 
 def summarize(hardened: list[dict], changes: list[dict], names: list[str]) -> dict:
@@ -117,6 +167,11 @@ def main() -> int:
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--budget", type=float, default=3.0, help="max USD per agent run")
     ap.add_argument("--label", default="")
+    ap.add_argument(
+        "--regrade",
+        type=Path,
+        help="re-run the challenges on a saved results directory",
+    )
     args = ap.parse_args()
 
     traps = json.loads(TRAPS.read_text(encoding="utf-8"))
@@ -128,6 +183,8 @@ def main() -> int:
         if not args.only_tasks or t["id"] in args.only_tasks.split(",")
     ]
     args.challenge_names = traps["challenges"]
+    if args.regrade:
+        return regrade(args.regrade, args.challenge_names)
 
     keep = Path(tempfile.mkdtemp(prefix="hardened-"))
     try:

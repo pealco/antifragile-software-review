@@ -1,7 +1,11 @@
 {
   "fixture": "payouts-platform",
   "harden_case": "payouts-harden",
-  "challenges": ["payouts-retry-key", "payouts-pause"],
+  "challenges": [
+    "payouts-retry-key",
+    "payouts-lost-responses",
+    "payouts-pause"
+  ],
   "tasks": [
     {
       "id": "bank-retry",
