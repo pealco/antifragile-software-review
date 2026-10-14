@@ -1,0 +1,13 @@
+name: Deploy
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply migrations
+        run: for f in db/migrations/*.sql; do psql "$DATABASE_URL" -f "$f"; done
+      - name: Roll out app and worker
+        run: ./deploy.sh
