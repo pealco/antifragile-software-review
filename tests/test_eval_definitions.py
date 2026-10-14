@@ -13,7 +13,9 @@ KNOWN_CHECKS = {
     "python_compiles",
     "evidence_resolves",
     "scanner_run",
+    "tests_changed",
 }
+CHALLENGE_SCRIPTS = ROOT / "evals" / "challenges"
 
 
 class TriggerQueriesTest(unittest.TestCase):
@@ -62,6 +64,11 @@ class OutputEvalsTest(unittest.TestCase):
                         ).is_file(),
                         check,
                     )
+                elif check.startswith("challenge:"):
+                    name = check.removeprefix("challenge:")
+                    script = CHALLENGE_SCRIPTS / f"{name.split('-')[0]}.py"
+                    self.assertTrue(script.is_file(), check)
+                    self.assertIn(f'"{name}"', script.read_text(), check)
                 else:
                     self.assertIn(check, KNOWN_CHECKS)
 

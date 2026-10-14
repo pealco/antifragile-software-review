@@ -126,6 +126,49 @@
         "The change includes a test or a documented verification command that would fail if the unscoped update came back.",
         "The final message says why this change was chosen over other candidates and names the remaining higher-risk items, such as the destructive migration or missing restore evidence."
       ]
+    },
+    {
+      "id": "payouts-audit",
+      "mode": "audit",
+      "fixture": "payouts-platform",
+      "gold": null,
+      "prompt": "I just joined the payments team and I'm on call next week. Review this repo and tell me what is most likely to cause a serious incident and what we should change first.",
+      "expected_output": "A review that finds that a payout can be sent twice, because the idempotency key is regenerated on every retry and every re-run, explains that bank transfers are final and the duplicate surfaces only at T+2, notices that the runbook's pause variable does not match the one the code reads, does not re-raise the already-fixed webhook double-credit, and ranks scanner-style noise below the payout risk.",
+      "checks": [
+        "tree_unchanged",
+        "evidence_resolves",
+        "cites:payouts/bank_client.py",
+        "cites:app/config.py"
+      ],
+      "assertions": [
+        "The review explains that a seller can be paid twice: payouts/bank_client.py creates a new Idempotency-Key on every call, and send_transfer is retried on timeouts (and the run can be repeated by the Kubernetes backoffLimit or a manual re-run), so a transfer the bank accepted but whose response was lost is sent again.",
+        "The duplicate-payout risk is ranked as the top risk, or tied for top.",
+        "The review explains why a duplicate payout is severe: bank transfers are final once accepted (recall is by phone and not guaranteed), and the settlement mismatch that would reveal it arrives only at T+2, as a ticket rather than a page.",
+        "The review finds that the documented pause does not work: the runbook sets PAYOUTS_ENABLED, but app/config.py reads PAYOUT_ENABLED (which the CronJob sets to true), so following the runbook leaves payouts running.",
+        "The review does not claim that redelivery of the same provider event can double-credit a seller today. If it discusses redelivery, it recognizes that the processed_events primary key, inserted in the same transaction as the credit, prevents it. Other webhook hardening suggestions do not fail this assertion.",
+        "No finding that rests only on the best-effort except/pass in lib/metrics.py, the expired-session DELETE, the dev seed script, or the single-region or single-bank architecture is ranked above the duplicate-payout risk.",
+        "Among its recommended changes, the review makes the transfer key stable across retries and re-runs (for example derived from seller and period, or stored in a pending payout row before the bank call) and proposes a test that would fail on the current code, such as a bank timeout after the transfer was accepted or retries that must reuse one key.",
+        "The fix proposed for the pause switch prevents the name mismatch rather than only detecting it: for example one name defined in one place that the runbook command uses, or a runner that refuses to start on an unknown or missing payout flag. A test or alert that notices the mismatch, offered alone, fails this assertion.",
+        "The review points out that the existing payout tests pass even though a retry sends a new key (test_transfer_sends_idempotency_key checks only that the header exists; test_transfer_retries_timeouts does not compare keys across attempts), so the tests give false confidence to whoever changes this code next."
+      ]
+    },
+    {
+      "id": "payouts-harden",
+      "mode": "implementation",
+      "fixture": "payouts-platform",
+      "gold": null,
+      "prompt": "Make this payouts service safer. Fix what is most likely to cause a serious incident, and make sure it stays fixed.",
+      "expected_output": "A patch that makes the retried bank transfer reuse one idempotency key and makes the documented pause actually stop payouts, each with a test that fails on the original code, and a summary of what remains.",
+      "checks": [
+        "python_compiles",
+        "tests_changed",
+        "challenge:payouts-retry-key",
+        "challenge:payouts-pause"
+      ],
+      "assertions": [
+        "The patch adds or changes a test that would fail on the original code for a risk it fixes, for example a test that retried transfers reuse one idempotency key, or that the runbook's pause variable stops the runner.",
+        "The final message names the risks it fixed and the higher-risk items that remain."
+      ]
     }
   ]
 }

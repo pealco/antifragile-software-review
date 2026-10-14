@@ -4,7 +4,8 @@
 Not part of CI: it calls a model. Every run is a fresh `claude -p` session in a temp git repo
 copied from a fixture, so leftovers cannot leak between runs. Two kinds of graders:
 
-* checks: code, run on the final state (files changed, evidence cites resolve). Cheap and exact.
+* checks: code, run on the final state (files changed, evidence cites resolve, challenge tests in
+  evals/challenges/ that feed a known-bad case to the patched repo). Cheap and exact.
 * assertions: a model grader returns PASS / FAIL / UNKNOWN with a quoted line as evidence.
 
 An assertion that passes in both configurations tells you nothing about the skill; the report
@@ -30,6 +31,7 @@ CASES = ROOT / "evals" / "evals.json"
 FIXTURES = ROOT / "evals" / "fixtures"
 GOLDEN = ROOT / "evals" / "golden"
 EVIDENCE_CHECKER = ROOT / "scripts" / "check_review_evidence.py"
+CHALLENGES = ROOT / "evals" / "challenges"
 RUN_TIMEOUT_S = 900
 MAX_TURNS = 40
 MAX_GRADER_CHARS = 60_000  # keep the grader prompt well inside its context
@@ -85,7 +87,10 @@ def make_project(case: dict, skill_dir: Path | None, skill_name: str) -> Path:
         shutil.copytree(
             skill_dir,
             project / ".claude" / "skills" / skill_name,
-            ignore=shutil.ignore_patterns(".git", "__pycache__", "results"),
+            # evals/ and docs/ hold assertions and worked answers the agent must not read
+            ignore=shutil.ignore_patterns(
+                ".git", "__pycache__", "evals", "tests", "docs"
+            ),
         )
     return project
 
@@ -182,6 +187,22 @@ def run_check(name: str, project: Path, run: dict) -> bool:
         return done.returncode == 0
     if name.startswith("cites:"):
         return name.removeprefix("cites:") in run["final_text"]
+    if name == "tests_changed":
+        return any(
+            f.startswith("tests/") or Path(f).name.startswith("test_")
+            for f in changed_files(project)
+        )
+    if name.startswith(
+        "challenge:"
+    ):  # a known-bad case the repo must now reject (evals/challenges/)
+        challenge = name.removeprefix("challenge:")
+        script = CHALLENGES / f"{challenge.split('-')[0]}.py"
+        done = subprocess.run([sys.executable, str(script), "check", challenge, str(project)],
+                              capture_output=True, text=True, check=False)  # fmt: skip
+        run.setdefault("challenge_detail", {})[challenge] = (
+            done.stdout.strip() or done.stderr[-300:]
+        )
+        return done.returncode == 0
     raise SystemExit(f"error: unknown check {name}")
 
 
@@ -242,6 +263,8 @@ def one_run(job: tuple[dict, bool, int], args: argparse.Namespace, name: str) ->
         if run["error"]:
             return out
         out["checks"] = {c: run_check(c, project, run) for c in case["checks"]}
+        if "challenge_detail" in run:
+            out["challenge_detail"] = run["challenge_detail"]
         out["assertions"] = grade_assertions(case, project, run, args.grader_model)
         return out
     finally:

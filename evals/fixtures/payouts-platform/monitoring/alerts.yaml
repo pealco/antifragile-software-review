@@ -1,0 +1,20 @@
+groups:
+  - name: payouts
+    rules:
+      - alert: PayoutRunnerFailed
+        expr: kube_job_status_failed{namespace="payments", job_name=~"payout-runner-.*"} > 0
+        for: 5m
+        labels: {severity: page, team: payments}
+        annotations:
+          summary: "Payout run failed after all retries"
+          runbook: docs/runbooks/payouts.md
+      - alert: WebhookErrorRate
+        expr: sum(rate(http_requests_total{route="/webhooks/provider", code=~"5.."}[5m])) > 0.5
+        for: 10m
+        labels: {severity: page, team: payments}
+      - alert: SettlementMismatch
+        expr: payouts_reconcile_mismatch_cents != 0
+        labels: {severity: ticket, team: payments}
+        annotations:
+          summary: "Bank settlement total differs from recorded payouts"
+          runbook: docs/runbooks/payouts.md

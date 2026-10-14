@@ -1,0 +1,21 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cleanup-sessions
+  namespace: payments
+spec:
+  schedule: "15 * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: cleanup
+              image: registry.internal/payouts-platform:0.14.2
+              command: ["python", "-m", "jobs.cleanup_sessions"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef: {name: payouts-db, key: url}

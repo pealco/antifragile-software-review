@@ -48,7 +48,9 @@ def make_project(
         shutil.copytree(
             skill_dir,
             project / ".claude" / "skills" / name,
-            ignore=shutil.ignore_patterns(".git", "__pycache__"),
+            ignore=shutil.ignore_patterns(
+                ".git", "__pycache__", "evals", "tests", "docs"
+            ),
         )
         if description is not None:  # judge a candidate description on its own
             skill_md = project / ".claude" / "skills" / name / "SKILL.md"

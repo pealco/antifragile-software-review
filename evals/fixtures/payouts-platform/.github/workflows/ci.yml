@@ -1,0 +1,16 @@
+name: ci
+on: [pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: {POSTGRES_PASSWORD: test}
+        ports: ["5432:5432"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - run: uv run pytest
+        env: {DATABASE_URL: "postgresql://postgres:test@localhost:5432/postgres"}

@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payouts-api
+  namespace: payments
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels: {app: payouts-api}
+  template:
+    metadata:
+      labels: {app: payouts-api}
+    spec:
+      containers:
+        - name: api
+          image: registry.internal/payouts-platform:0.14.2
+          ports: [{containerPort: 8080}]
+          readinessProbe:
+            httpGet: {path: /healthz, port: 8080}
+            periodSeconds: 5
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: {name: payouts-db, key: url}
+            - name: PROVIDER_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef: {name: provider, key: webhook_secret}

@@ -1,0 +1,33 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: payout-runner
+  namespace: payments
+spec:
+  schedule: "0 1 * * *"
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      activeDeadlineSeconds: 7200
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: runner
+              image: registry.internal/payouts-platform:0.14.2
+              command: ["python", "-m", "payouts.runner"]
+              env:
+                - name: PAYOUT_ENABLED
+                  value: "true"
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef: {name: payouts-db, key: url}
+                - name: NORTHWIND_API_KEY
+                  valueFrom:
+                    secretKeyRef: {name: northwind, key: api_key}
+              resources:
+                requests: {cpu: 200m, memory: 256Mi}
+                limits: {memory: 512Mi}

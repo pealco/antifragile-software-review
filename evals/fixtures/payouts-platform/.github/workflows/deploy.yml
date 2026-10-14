@@ -1,0 +1,19 @@
+name: deploy
+on:
+  push:
+    branches: [main]
+concurrency: {group: deploy-prod, cancel-in-progress: false}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t registry.internal/payouts-platform:${GITHUB_SHA} .
+      - run: docker push registry.internal/payouts-platform:${GITHUB_SHA}
+      - run: ./deploy/migrate.sh
+      - run: kubectl -n payments set image deployment/payouts-api api=registry.internal/payouts-platform:${GITHUB_SHA}
+      - run: kubectl -n payments rollout status deployment/payouts-api --timeout=5m
+      - run: kubectl -n payments set image cronjob/payout-runner runner=registry.internal/payouts-platform:${GITHUB_SHA}
+      - run: kubectl -n payments set image cronjob/cleanup-sessions cleanup=registry.internal/payouts-platform:${GITHUB_SHA}
+      - run: kubectl -n payments set image cronjob/reconcile-settlements reconcile=registry.internal/payouts-platform:${GITHUB_SHA}
