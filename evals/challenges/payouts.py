@@ -3,21 +3,24 @@
 
 A challenge feeds a known-bad situation to the repo as an agent left it, and checks that the
 mistake no longer gets through. Each one also runs a known-good case, so a "fix" that stops all
-payouts does not pass. Nothing here needs the fixture's dependencies: the database, statsd and
-the bank's HTTP API are stubs, and the real CronJob entrypoint (`python -m payouts.runner`) runs.
+payouts does not pass. Nothing here needs the fixture's dependencies: statsd and the bank's HTTP
+API are stubs, the database is SQLite built from the repo's own migrations (so unique constraints
+and rows written earlier in the run behave as in production), and the real CronJob entrypoint
+(`python -m payouts.runner`) runs.
 
 Usage:
   payouts.py check <challenge> <project>     exit 0 if the control works, 1 if not
   payouts.py simulate <scenario> <project>   (internal) print one JSON result
 
-Limit: the stub database keeps no state, so a re-run of the job cannot see rows the first run
-wrote. The retry challenge covers retries inside one run, not Kubernetes re-runs.
+Limit: the SQL is translated from Postgres. Statements SQLite cannot run are reported as
+`sql_errors` in the result, so a failure caused by the harness is visible.
 """
 
 from __future__ import annotations
 
 import json
 import re
+import sqlite3
 import subprocess
 import sys
 import types
@@ -34,62 +37,223 @@ CHALLENGES = {
 
 
 class Row(dict):
-    def __missing__(self, key):  # any column a changed query asks for
-        return 50_000 if key in ("balance", "total") else 1
+    """A dict row (psycopg's dict_row) that also allows tuple-style row[0] access."""
 
     def __getitem__(self, key):
-        if isinstance(key, int):  # tuple-style access
-            return 1
+        if isinstance(key, int):
+            return list(self.values())[key]
         return super().__getitem__(key)
 
 
+class PgError(Exception):
+    pass
+
+
+class IntegrityError(PgError):
+    pass
+
+
+class UniqueViolation(IntegrityError):
+    pass
+
+
+def to_sqlite(sql: str) -> str:
+    """Translate the Postgres dialect the code uses into SQLite."""
+    sql = re.sub(r"%\((\w+)\)s", r":\1", sql)
+    sql = sql.replace("%s", "?").replace("%%", "%")
+    sql = re.sub(r"::\s*\w+(\[\])?", "", sql)
+    sql = re.sub(
+        r"\bFOR\s+(NO\s+KEY\s+)?UPDATE(\s+(SKIP\s+LOCKED|NOWAIT))?",
+        "",
+        sql,
+        flags=re.IGNORECASE,
+    )
+    return re.sub(r"\bnow\(\)", "pg_now()", sql, flags=re.IGNORECASE)
+
+
+def schema_to_sqlite(sql: str) -> str:
+    """Translate a migration. NOT NULL is dropped so a schema change SQLite cannot express
+    (ALTER COLUMN ... DROP NOT NULL) does not block a valid fix; keys and UNIQUE stay."""
+    sql = re.sub(
+        r"\bbigserial\s+PRIMARY\s+KEY\b",
+        "INTEGER PRIMARY KEY",
+        sql,
+        flags=re.IGNORECASE,
+    )
+    sql = re.sub(r"\b(big)?serial\b", "INTEGER", sql, flags=re.IGNORECASE)
+    sql = re.sub(r"\bNOT\s+NULL\b", "", sql, flags=re.IGNORECASE)
+    sql = re.sub(
+        r"\bDEFAULT\s+now\(\)", "DEFAULT CURRENT_TIMESTAMP", sql, flags=re.IGNORECASE
+    )
+    sql = re.sub(
+        r"\b(ADD|DROP)\s+COLUMN\s+IF\s+(NOT\s+)?EXISTS\b",
+        r"\1 COLUMN",
+        sql,
+        flags=re.IGNORECASE,
+    )
+    return to_sqlite(sql)
+
+
+def adapt(value):
+    import datetime as dt
+
+    if isinstance(value, (dt.date, dt.datetime)):
+        return value.isoformat()
+    if isinstance(value, (list, tuple)):
+        return type(value)(adapt(v) for v in value)
+    if isinstance(value, dict):
+        return {k: adapt(v) for k, v in value.items()}
+    return value
+
+
 class Cursor:
-    def __init__(self, sql: str):
-        s = sql.lower()
-        if "from sellers" in s:
-            self.rows = [Row(id=1, bank_account_ref="acct_1", email="s@example.test")]
-        elif "sum(" in s:
-            self.rows = [Row(balance=50_000, total=50_000)]
-        elif s.lstrip().startswith("select") and "from payouts" in s:
-            self.rows = []  # nobody has been paid yet
-        else:
-            self.rows = [Row()]
-        self.rowcount = 1
+    def __init__(self, conn: Conn):
+        self.conn = conn
+        self.rows: list[Row] = []
+        self.rowcount = -1
+        self.description = None
+
+    def execute(self, sql, params=None):
+        try:
+            cur = self.conn.db.execute(
+                to_sqlite(sql), adapt(params) if params is not None else ()
+            )
+        except sqlite3.IntegrityError as exc:
+            cls = (
+                UniqueViolation
+                if "UNIQUE" in str(exc) or "PRIMARY KEY" in str(exc)
+                else IntegrityError
+            )
+            raise cls(str(exc)) from None
+        except sqlite3.Error as exc:
+            self.conn.sql_errors.append(f"{exc}: {sql.strip()[:120]}")
+            raise PgError(str(exc)) from None
+        self.description = cur.description
+        cols = [d[0] for d in cur.description or []]
+        self.rows = [Row(zip(cols, r)) for r in cur.fetchall()] if cols else []
+        self.rowcount = cur.rowcount
+        return self
 
     def fetchone(self):
-        return self.rows[0] if self.rows else None
+        return self.rows.pop(0) if self.rows else None
 
     def fetchall(self):
-        return list(self.rows)
+        rows, self.rows = self.rows, []
+        return rows
 
     def __iter__(self):
-        return iter(self.rows)
+        return iter(self.fetchall())
 
-
-class Conn:
     def __enter__(self):
         return self
 
     def __exit__(self, *exc):
         return False
 
-    def execute(self, sql, params=None):
-        return Cursor(sql)
-
-    def cursor(self, *a, **k):
-        return self
-
-    def transaction(self):
-        return Conn()
-
-    def commit(self):
-        pass
-
-    def rollback(self):
-        pass
-
     def close(self):
         pass
+
+
+class Transaction:
+    def __init__(self, conn: Conn):
+        self.conn = conn
+
+    def __enter__(self):
+        self.conn.depth += 1
+        self.name = f"sp{self.conn.depth}"
+        self.conn.begin()
+        self.conn.db.execute(f"SAVEPOINT {self.name}")
+        return self
+
+    def __exit__(self, exc_type, *exc):
+        if exc_type:
+            self.conn.db.execute(f"ROLLBACK TO {self.name}")
+        self.conn.db.execute(f"RELEASE {self.name}")
+        self.conn.depth -= 1
+        return False
+
+
+class Conn:
+    """psycopg-style connection on one shared SQLite file: work commits when the `with` block
+    exits cleanly and rolls back on an exception, as psycopg does."""
+
+    path = ""
+    sql_errors: list[str] = []  # noqa: RUF012 - shared on purpose, reported in the result
+
+    def __init__(self, *a, **k):
+        self.db = sqlite3.connect(Conn.path, isolation_level=None)
+        self.db.create_function("pg_now", 0, lambda: __import__("datetime").datetime.now(
+            __import__("datetime").timezone.utc).isoformat())  # fmt: skip
+        for fn in ("pg_advisory_xact_lock", "pg_advisory_lock", "pg_advisory_unlock"):
+            self.db.create_function(fn, -1, lambda *a: None)
+        self.db.create_function("pg_try_advisory_lock", -1, lambda *a: 1)
+        self.db.create_function("pg_try_advisory_xact_lock", -1, lambda *a: 1)
+        self.in_tx = False
+        self.depth = 0
+        self.autocommit = False
+
+    def begin(self):
+        if not self.in_tx and not self.autocommit:
+            self.db.execute("BEGIN")
+            self.in_tx = True
+
+    def execute(self, sql, params=None):
+        self.begin()
+        return Cursor(self).execute(sql, params)
+
+    def cursor(self, *a, **k):
+        self.begin()
+        return Cursor(self)
+
+    def transaction(self):
+        return Transaction(self)
+
+    def commit(self):
+        if self.in_tx:
+            self.db.execute("COMMIT")
+            self.in_tx = False
+
+    def rollback(self):
+        if self.in_tx:
+            self.db.execute("ROLLBACK")
+            self.in_tx = False
+
+    def close(self):
+        self.commit()
+        self.db.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, *exc):
+        if exc_type:
+            self.rollback()
+        else:
+            self.commit()
+        return False
+
+
+def create_database(project: Path, path: str) -> None:
+    """Apply the repo's own migrations (including any an agent added), then seed one seller with
+    an available balance of 50,000 cents."""
+    import datetime as dt
+
+    Conn.path = path
+    db = sqlite3.connect(path, isolation_level=None)
+    for migration in sorted((project / "db" / "migrations").glob("*.sql")):
+        text = re.sub(r"--[^\n]*", "", migration.read_text(encoding="utf-8"))
+        for statement in text.split(";"):
+            if statement.strip():
+                try:
+                    db.execute(schema_to_sqlite(statement))
+                except sqlite3.Error:
+                    pass  # a statement SQLite cannot express; keep going
+    earned = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=10)).isoformat()
+    db.execute("INSERT INTO sellers (id, email, display_name, bank_account_ref, payouts_paused) "
+               "VALUES (1, 's@example.test', 'S', 'acct_1', 0)")  # fmt: skip
+    db.execute("INSERT INTO ledger_entries (seller_id, kind, amount_cents, available_at, reference) "
+               "VALUES (1, 'earning', 50000, ?, 'ch_1')", [earned])  # fmt: skip
+    db.close()
 
 
 class Bank:
@@ -187,18 +351,14 @@ def install_stubs(bank: Bank) -> None:
         request=lambda method, *a, **k: getattr(bank, method.lower())(*a, **k),
     )  # fmt: skip
 
-    rows = module("psycopg.rows", dict_row=object())
+    rows = module("psycopg.rows", dict_row=object(), tuple_row=object())
     pg_errors = module(
-        "psycopg.errors", UniqueViolation=type("UniqueViolation", (Exception,), {})
+        "psycopg.errors", UniqueViolation=UniqueViolation, IntegrityError=IntegrityError
     )
     module(
-        "psycopg",
-        Error=Exception,
-        connect=lambda *a, **k: Conn(),
-        Connection=Conn,
-        rows=rows,
-        errors=pg_errors,
-    )
+        "psycopg", Error=PgError, DatabaseError=PgError, IntegrityError=IntegrityError,
+        connect=Conn, Connection=Conn, Cursor=Cursor, rows=rows, errors=pg_errors,
+    )  # fmt: skip
 
     class StatsClient:
         def __init__(self, *a, **k):
@@ -220,6 +380,11 @@ def simulate(scenario: str, project: Path) -> dict:
         )
     )
     install_stubs(bank)
+    import tempfile
+
+    create_database(
+        project, str(Path(tempfile.mkdtemp(prefix="payouts-db-")) / "payouts.db")
+    )
     os.chdir(project)
     sys.path.insert(0, str(project))
     error = None
@@ -230,7 +395,14 @@ def simulate(scenario: str, project: Path) -> dict:
             error = f"SystemExit({exc.code})"
     except BaseException as exc:  # noqa: BLE001 - any refusal to start counts as a stop
         error = f"{type(exc).__name__}: {exc}"
-    return {"transfers": len(bank.transfers), "bank_calls": bank.calls, "error": error}
+    result = {
+        "transfers": len(bank.transfers),
+        "bank_calls": bank.calls,
+        "error": error,
+    }
+    if Conn.sql_errors:
+        result["sql_errors"] = Conn.sql_errors[:3]
+    return result
 
 
 # --- parent process: build the environment, run scenarios, judge ---------------------------

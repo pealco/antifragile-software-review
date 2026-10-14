@@ -65,6 +65,27 @@ def send_transfer(account_ref, amount_cents, memo, idempotency_key):
 """
 
 
+# Claims each payout once in the database before the first bank call. A later path that also
+# claims cannot pay again; one that skips the claim can.
+CLAIM = """
+
+import psycopg
+
+
+def claim(idempotency_key):
+    with psycopg.connect("") as conn:
+        conn.execute("INSERT INTO transfer_claims (idempotency_key) VALUES (%s)", [idempotency_key])
+
+
+_unclaimed_send = send_transfer
+
+
+def send_transfer(account_ref, amount_cents, memo, idempotency_key):
+    claim(idempotency_key)
+    return _unclaimed_send(account_ref, amount_cents, memo, idempotency_key)
+"""
+
+
 class PayoutChallengesTest(unittest.TestCase):
     """The challenges must reject the unfixed fixture, accept a real fix, and reject a "fix"
     that stops every payout. A challenge that cannot tell these apart proves nothing."""
@@ -130,6 +151,33 @@ class PayoutChallengesTest(unittest.TestCase):
             "a", encoding="utf-8"
         ) as f:
             f.write(gated)
+        self.assertFalse(passes("payouts-lost-responses", self.project))
+
+    def test_claim_in_database_stops_a_fallback_that_uses_it(self) -> None:
+        apply_stable_key(self.project)
+        (self.project / "db" / "migrations" / "006_transfer_claims.sql").write_text(
+            "CREATE TABLE transfer_claims (idempotency_key text PRIMARY KEY);\n",
+            encoding="utf-8",
+        )
+        with (self.project / "payouts" / "bank_client.py").open(
+            "a", encoding="utf-8"
+        ) as f:
+            f.write(CLAIM + FALLBACK.replace(
+                "    except requests.Timeout:\n", "    except requests.Timeout:\n        claim(idempotency_key)\n"
+            ))  # fmt: skip
+        self.assertTrue(passes("payouts-lost-responses", self.project))
+        self.assertTrue(passes("payouts-retry-key", self.project))
+
+    def test_claim_does_not_stop_a_fallback_that_skips_it(self) -> None:
+        apply_stable_key(self.project)
+        (self.project / "db" / "migrations" / "006_transfer_claims.sql").write_text(
+            "CREATE TABLE transfer_claims (idempotency_key text PRIMARY KEY);\n",
+            encoding="utf-8",
+        )
+        with (self.project / "payouts" / "bank_client.py").open(
+            "a", encoding="utf-8"
+        ) as f:
+            f.write(CLAIM + FALLBACK)
         self.assertFalse(passes("payouts-lost-responses", self.project))
 
     def test_stopping_all_payouts_fails_both(self) -> None:
