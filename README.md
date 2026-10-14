@@ -42,7 +42,8 @@ This repository contains:
 - `scripts/check_package_contract.py`: a CI-enforced package consistency check for skill metadata, references, release pins, generated docs, and workflow pins.
 - `templates/review-scorecard.md`: a reusable scorecard for critical-flow traces, exposure scoring, and findings.
 - `examples/scorecard-review.md`: a compact example of the review scorecard filled out for a realistic service.
-- `evals/`: executable fixture checks for the highest-value skill behaviors.
+- `evals/`: scanner-and-golden-file checks that run in CI, plus model-in-the-loop evals for triggering and review quality (see Skill Evals).
+- `scripts/check_review_evidence.py`: checks that every file and line a review cites on an `Evidence:` line exists. `SKILL.md` tells the agent to run it before it sends a review.
 
 The scanner is deliberately secondary. It helps discover concrete code smells and review leads, but the skill's main value is broader architectural, operational, and design analysis.
 
@@ -476,7 +477,7 @@ Run package contract checks:
 python3 scripts/check_package_contract.py
 ```
 
-Run executable skill behavior fixtures:
+Run the scanner-and-golden-file fixture checks (no model, runs in CI):
 
 ```bash
 python3 evals/run_evals.py
@@ -491,10 +492,32 @@ python3 scripts/antifragile_scan.py --list-rules > references/scanner-rules.md
 Check Python syntax:
 
 ```bash
-python3 -m py_compile scripts/antifragile_scan.py scripts/check_package_contract.py tests/test_antifragile_scan.py tests/test_evaluation_scenarios.py evals/run_evals.py
+python3 -m py_compile scripts/antifragile_scan.py scripts/check_package_contract.py scripts/check_review_evidence.py tests/test_antifragile_scan.py tests/test_evaluation_scenarios.py tests/test_check_review_evidence.py tests/test_eval_definitions.py evals/run_evals.py evals/run_trigger_evals.py evals/run_output_evals.py
 ```
 
 The self-scan intentionally skips `scripts/antifragile_scan.py` as `self-scanner` so the scanner's own pattern definitions do not dominate the report.
+
+### Skill Evals
+
+`evals/run_evals.py` and the unit tests run the scanner on fixtures and check hand-written golden reviews. They pass whatever a model does with the skill. Two other runners call `claude -p` and cost money, so CI does not run them. Each run is a fresh session in a temporary copy of the fixtures, using `--setting-sources project` so user skills and memory do not leak in.
+
+Triggering. `evals/trigger_queries.json` holds realistic prompts labeled `should_trigger`, split into `train`, `validation`, and `holdout`. Negatives are near-misses that share keywords with the skill. A query passes when its trigger rate over 3 runs is above 0.5 (should-trigger) or below 0.5 (should-not-trigger).
+
+```bash
+python3 evals/run_trigger_evals.py --runs 3                       # train + validation
+python3 evals/run_trigger_evals.py --split holdout --runs 3       # run once per description, do not tune on it
+python3 evals/run_trigger_evals.py --description-file evals/descriptions/C-goal-led-with-boundary.txt
+python3 evals/run_trigger_evals.py --model haiku                  # repeat on each model you target
+```
+
+Review quality. `evals/evals.json` holds cases with code `checks` and model-graded `assertions`. `run_output_evals.py` runs each case with and without the skill and flags every item as `NO-OP` (passes in both, so it tests nothing), `BROKEN?` (fails in both), `VALUE`, or `WORSE`. A grader that cannot decide returns `UNKNOWN`, which never counts as a pass.
+
+```bash
+python3 evals/run_output_evals.py --runs 3
+python3 evals/run_output_evals.py --configs with_skill --runs 3 --skill-dir /path/to/candidate
+```
+
+Results go to `evals/results/`, which is not committed. Read a sample of the transcripts before you trust a score. Do not edit an assertion after you see a result unless you rerun both configurations.
 
 ### Skill And Agent Design
 
@@ -523,7 +546,7 @@ Contributions are welcome. Useful contributions include:
 Before opening a change, run:
 
 ```bash
-python3 -m py_compile scripts/antifragile_scan.py scripts/check_package_contract.py tests/test_antifragile_scan.py tests/test_evaluation_scenarios.py evals/run_evals.py
+python3 -m py_compile scripts/antifragile_scan.py scripts/check_package_contract.py scripts/check_review_evidence.py tests/test_antifragile_scan.py tests/test_evaluation_scenarios.py tests/test_check_review_evidence.py tests/test_eval_definitions.py evals/run_evals.py evals/run_trigger_evals.py evals/run_output_evals.py
 python3 scripts/check_package_contract.py
 python3 -m unittest discover -s tests
 python3 evals/run_evals.py

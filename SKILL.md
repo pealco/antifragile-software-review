@@ -1,8 +1,9 @@
 ---
 name: antifragile-software-review
-description: Review and improve software repositories through Nassim Taleb's antifragility lens.
-when_to_use: Use when asked to make a codebase antifragile, apply Antifragile or Taleb concepts to software design, find or fix fragility risks, improve resilience beyond robustness, or inspect architecture, reliability, observability, deployment, testing, rollback, incident-learning, coupling, optionality, or failure-handling tradeoffs.
+description: Use when the user wants to find, rank, or reduce what would hurt a software system under stress, even if they never say antifragile. Covers irreversible or hard-to-undo operations (data migrations, bulk updates, deploys), single points of failure, missing rollback or feedback loops, outages or incidents that never become tests or alerts, dependency and vendor lock-in decisions, and applying Taleb's antifragility ideas to a codebase or architecture. Reviews the repository, traces one critical flow, scores exposure, then either reports findings (for audit wording such as review or assess) or patches the highest-risk reversible issue (for action wording such as harden, fix, or make). Takes a repo path or focus. Not for line-level bug review, security audits, performance tuning, or narrow feature work.
 argument-hint: "[repo-path or focus]"
+compatibility: Requires Python 3.10+ for the bundled scripts. Needs no network access.
+allowed-tools: Bash(python3 *skills/antifragile-software-review/scripts/antifragile_scan.py*) Bash(python3 *skills/antifragile-software-review/scripts/check_review_evidence.py*)
 ---
 
 # Antifragile Software Review
@@ -11,11 +12,9 @@ argument-hint: "[repo-path or focus]"
 
 Inspect the codebase for architectural and operational design choices that are harmed by volatility, uncertainty, stress, errors, growth, incidents, or changing requirements. Produce concrete findings and changes that help the system gain information, options, or safety from small failures instead of merely surviving them.
 
-Load `references/review-playbook.md` for the review method. Load `references/antifragility-primer.md` when you need the conceptual mapping from Taleb's ideas to software design. Use `templates/review-scorecard.md` when the user wants a reusable review artifact or when a compact scorecard would make findings easier to compare; `examples/scorecard-review.md` shows the intended level of specificity. When changing this skill, use `references/evaluation-scenarios.md` and `evals/run_evals.py` as the behavior checklist.
+Load `references/review-playbook.md` for the review method. Load `references/antifragility-primer.md` when you need the conceptual mapping from Taleb's ideas to software design. Use `templates/review-scorecard.md` when the user wants a reusable review artifact or when a compact scorecard would make findings easier to compare; `examples/scorecard-review.md` shows the intended level of specificity.
 
-Claude Code compatibility:
-- The skill can be invoked directly as `/antifragile-software-review [repo-path or focus]`; treat any provided arguments as the target repository, review scope, or implementation focus.
-- In Claude Code, `${CLAUDE_SKILL_DIR}` resolves to this skill directory. In other environments, use the absolute path to this skill directory.
+Invoked as `/antifragile-software-review [repo-path or focus]`, treat any arguments as the target repository, review scope, or implementation focus. `${CLAUDE_SKILL_DIR}` is this skill's directory; where it is unset, use the absolute path.
 
 ## Workflow
 
@@ -45,6 +44,7 @@ Claude Code compatibility:
    - Follow the flow from trigger to state mutation, dependency calls, failure handling, observability, rollback or degradation path, and owner.
    - Name what evidence exists for each step and what is missing.
    - Classify the stress response curve: capped harm, linear harm, superlinear harm, or convex gain from safe stress.
+   - Done when every trace field has evidence or is listed as missing evidence.
    - Use the trace to decide which scanner leads matter. A small smell on a critical flow can outrank many disconnected matches.
 
 6. Run the heuristic scanner for supporting leads:
@@ -54,8 +54,6 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/antifragile_scan.py" /path/to/repo
 ```
 
 Use scanner output as a lead list only, subordinate to the architectural analysis. The scanner's critical-flow candidates can help choose the first flow to trace, especially when one file combines entrypoint, state mutation, dependency, release/ops, feedback, and exposure-overlap signals. Its exposure summary can help choose which blast-radius, irreversibility, feedback-delay, dependency-concentration, or ruin-potential questions to trace next, but both are prioritization aids. Confirm important claims by reading the relevant code, tests, docs, and deployment configuration. Treat operational term counts as mention locations, not proof that rollback, canary, observability, or incident-learning capabilities actually work.
-
-If `${CLAUDE_SKILL_DIR}` is unavailable, replace it with the absolute path to this skill directory.
 
 The scanner is language-aware but intentionally heuristic. It includes generic leads plus first-pass Python, Rust, SQL, TypeScript, JavaScript, Go, Java, Kotlin, Ruby, shell, Terraform, Kubernetes YAML, and GitHub Actions signals. Prefer ecosystem linters and infrastructure policy tools for precise validation; use scanner `linter_overlaps` as a hint that the same code shape may already be covered by Ruff, Clippy, ESLint, TypeScript ESLint, RuboCop, ShellCheck, actionlint, tfsec, Checkov, or another language-specific tool.
 
@@ -97,12 +95,10 @@ Add `antifragile-scan: ignore` or `antifragile-scan: ignore[pattern-id]` on a li
    - Prioritize ruin risks and irreversible actions first.
    - Prefer small, reversible changes that create learning loops.
    - Score confirmed findings with the exposure model in `references/review-playbook.md`: blast radius, irreversibility, feedback delay, dependency concentration, and ruin potential.
-   - Report evidence quality separately from exposure: direct critical-flow evidence, config/test/deploy evidence, operational artifact, docs-only, or scanner-only.
-   - Use the evidence ladder from `references/review-playbook.md`: direct critical-flow evidence beats scanner-only or docs-only leads.
+   - Report evidence quality separately from exposure, using the evidence ladder in `references/review-playbook.md`: direct critical-flow evidence beats scanner-only or docs-only leads.
    - Separate robust/resilient fixes from truly antifragile fixes. A retry may be robust; a retry budget with metrics, alerting, and an incident-derived regression test is closer to antifragile.
    - Before recommending an abstraction, apply the optionality test: real uncertainty, plausible second option, cheap boundary, justified carrying cost, and observable use.
    - When evidence is missing, recommend the cheapest observation that would raise confidence instead of inflating certainty.
-   - Keep the process simple: prefer one agent and a clear evidence trail unless the user or harness explicitly calls for parallel specialists.
 
 10. In implementation mode, close the loop.
    - Patch one or more small, high-leverage changes that bound downside or create learning.
@@ -151,7 +147,7 @@ Start with the architectural thesis, then findings. Do not let scanner output do
   Evidence: `path/file.ext:123`
   Evidence quality: direct critical-flow path / config-test-deploy signal / operational artifact / docs-only / scanner-only / inference.
   Analysis area: architecture / data / release / dependency / observability / testing / security.
-  Exposure score: N/15 (blast radius, irreversibility, feedback delay, dependency concentration, ruin potential).
+  Exposure score: N/15 = blast radius a + irreversibility b + feedback delay c + dependency concentration d + ruin potential e (each 0-3).
   Fragility: why volatility, errors, growth, or uncertainty hurts this design.
   Blast radius: what fails and who or what is affected.
   Reversibility: how easy the proposed move is to roll back or bound.
@@ -174,5 +170,15 @@ Start with the architectural thesis, then findings. Do not let scanner output do
 - Scanner leads to verify:
 - Next reversible patch:
 ```
+
+Before you send the review, check its evidence. Pass your `Evidence:` lines to the checker on stdin; it writes nothing, so it is safe in audit mode:
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/scripts/check_review_evidence.py" - --root /path/to/repo <<'EOF'
+- Evidence: `path/file.ext:123`
+EOF
+```
+
+Each `FAIL` names a missing file or the number of lines the file really has. Fix the cite and run it again until it prints `N/N evidence cites resolve`. A file you cite as missing is fine if the same line says it is missing.
 
 Do not present generic practices as findings without codebase evidence. If evidence is missing, say what is unknown and how to verify it. Scanner-only leads should usually appear in "Scanner leads to verify" unless you confirm they sit on an important flow.
