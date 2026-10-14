@@ -51,6 +51,7 @@
 - Reversibility:
 - Stress response curve:
 - Antifragile move:
+- Control strength (today, after the move, required):
 - Gain mechanism:
 - Robust vs antifragile delta:
 - Missing evidence:

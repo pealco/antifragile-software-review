@@ -43,6 +43,7 @@ Invoked as `/antifragile-software-review [repo-path or focus]`, treat any argume
 5. Trace at least one high-exposure critical flow before ranking findings.
    - Follow the flow from trigger to state mutation, dependency calls, failure handling, observability, rollback or degradation path, and owner.
    - Name what evidence exists for each step and what is missing.
+   - At each step, ask who acts on it (a developer, an operator or on-call engineer, or a coding agent), what mistake that actor can make, and the strongest control that stops the mistake before it causes harm. Rate that control on the C0-C5 scale in `references/review-playbook.md` (Control Strength), and give it full credit only if a challenge test or drill proves it works.
    - Classify the stress response curve: capped harm, linear harm, superlinear harm, or convex gain from safe stress.
    - Done when every trace field has evidence or is listed as missing evidence.
    - Use the trace to decide which scanner leads matter. A small smell on a critical flow can outrank many disconnected matches.
@@ -78,7 +79,10 @@ Add `antifragile-scan: ignore` or `antifragile-scan: ignore[pattern-id]` on a li
    - Fragile optimization: saturated queues, no slack, maximized utilization, no backpressure, no rate limits, no load shedding.
    - Unsafe experimentation: no feature flags, canaries, circuit breakers, kill switches, staged rollout, contract tests, or blast-radius limits.
    - Data ruin: backfills, deletes, migrations, billing actions, or external side effects without dry-run counts, checkpoints, idempotency, restore drills, or audit trails.
-   - Incident amnesia: incidents create tickets or cleanup work but no regression tests, dashboards, runbook updates, ownership changes, or safer defaults.
+   - Incident amnesia: incidents create tickets or cleanup work but no regression tests, dashboards, runbook updates, ownership changes, safer defaults, or devices that make the same mistake impossible.
+   - Mistake-prone design: two sources of truth for one fact (config names, constants, runbook commands versus code), unsafe defaults, arguments that must always be set but are optional, invalid states that the types or schema allow, and runbook commands that nothing executes.
+   - Unproven controls: kill switches, pause flags, restores, rollbacks, validators, and guards that no test or drill has ever exercised, and tests that cannot fail on the fault they name (for example tests that use a wildcard in the one field where the fault lives).
+   - Agent-hostile code: one name for two things or two names for one thing, docs or comments that contradict the code, behavior configured far from where it runs, no fast local check (tests need production services or are flaky), tests that pass while the behavior they name is broken, dangerous commands that run by default or without an explicit target, generated files with no marker, and repo rules that are not written down for agents. Apply the agent rules in `references/review-playbook.md` (Control Strength).
 
 8. Map evidence to antifragile levers.
    - Via negativa: remove the fragile thing before adding machinery.
@@ -89,6 +93,7 @@ Add `antifragile-scan: ignore` or `antifragile-scan: ignore[pattern-id]` on a li
    - Redundancy and slack: preserve spare capacity, backup paths, retries with budgets, bulkheads, queues, and graceful degradation.
    - Decentralization: contain failures locally and let teams/components learn independently where possible.
    - Skin in the game: make ownership, alerts, dashboards, and post-incident follow-through visible to the people changing the system.
+   - Mistake-proofing (poka-yoke): mistakes are inevitable; harm is not. Prefer a control that makes the mistake impossible (C5) or rejects it at the moment it is made (C4) over a downstream stop (C3), a warning (C2), or documentation (C1). Keep the signal: a stop should be visible and recorded, never a silent fallback. Design for developers, operators, and coding agents alike.
    - Gain mechanism: state whether the move creates faster learning, smaller blast radius, cheaper reversal, safer experimentation, dependency optionality, or incident-to-test conversion.
 
 9. Rank recommendations by fragility exposure.
@@ -96,6 +101,7 @@ Add `antifragile-scan: ignore` or `antifragile-scan: ignore[pattern-id]` on a li
    - Prefer small, reversible changes that create learning loops.
    - Score confirmed findings with the exposure model in `references/review-playbook.md`: blast radius, irreversibility, feedback delay, dependency concentration, and ruin potential.
    - Report evidence quality separately from exposure, using the evidence ladder in `references/review-playbook.md`: direct critical-flow evidence beats scanner-only or docs-only leads.
+   - Set the required control strength from reversibility and actor reach (`references/review-playbook.md`, Control Strength), and report the gap between required and effective strength. When exposure is similar, rank the larger gap first. A delete API that requires a typed ID (C5) beats a review step that checks which IDs a script will delete (C3).
    - Separate robust/resilient fixes from truly antifragile fixes. A retry may be robust; a retry budget with metrics, alerting, and an incident-derived regression test is closer to antifragile.
    - Before recommending an abstraction, apply the optionality test: real uncertainty, plausible second option, cheap boundary, justified carrying cost, and observable use.
    - When evidence is missing, recommend the cheapest observation that would raise confidence instead of inflating certainty.
@@ -103,6 +109,7 @@ Add `antifragile-scan: ignore` or `antifragile-scan: ignore[pattern-id]` on a li
 10. In implementation mode, close the loop.
    - Patch one or more small, high-leverage changes that bound downside or create learning.
    - Add validation that will fail if the fragility comes back: regression tests, scanner tests, CI checks, metrics assertions, dry-run checks, or documented verification commands.
+   - When the patch adds a control, add its challenge test: a test that feeds the known-bad case (for example the input one past the limit, or the exact command an operator would run) and asserts the control rejects it. Confirm it fails on the original code and passes on the patched code. Keep a known-good case passing too, so the control does not block correct work.
    - Re-run the relevant tests, scanner, and format/lint commands. If validation cannot run, say exactly what blocked it.
    - Report what changed, what now catches regressions, and any remaining higher-risk backlog items.
 
@@ -153,6 +160,7 @@ Start with the architectural thesis, then findings. Do not let scanner output do
   Reversibility: how easy the proposed move is to roll back or bound.
   Stress response curve: capped / linear / superlinear / convex.
   Antifragile move: concrete change that bounds downside and creates learning/options.
+  Control strength: today Cn, proven or unproven -> after the move Cm, with its challenge test; required Ck.
   Gain mechanism: faster learning / smaller blast radius / cheaper reversal / safer experimentation / dependency optionality / incident-to-test conversion.
   Robust vs antifragile delta: why this produces feedback, optionality, or safer stress rather than only durability.
   Missing evidence and cheapest observation:

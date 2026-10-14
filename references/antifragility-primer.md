@@ -55,6 +55,20 @@ Name the mechanism of gain. A recommendation is stronger when it clearly creates
 
 Avoid treating "more redundancy" as automatically antifragile. Redundancy without feedback can be expensive robustness. Redundancy plus measured stress, ownership, and learning can become antifragile.
 
+## Mistake-Proofing (Poka-Yoke)
+
+Shigeo Shingo's poka-yoke starts from the claim that mistakes are inevitable but defects are not. A device that stops the work (a *control*) beats one that only signals (a *warning*), and a check at the source, when the mistake is made, beats inspection afterwards. Shingo first called these devices *baka-yoke* (fool-proofing) and renamed them because the name blamed the worker: the method assumes everyone makes mistakes.
+
+Poka-yoke and antifragility fit together. Poka-yoke does not hide mistakes; it turns a silent defect into a visible stop. Both oppose masking: silent fallbacks, `except: pass`, lenient parsing, and defaults that hide a wrong input. The combined rule: stop every mistake that could lead to ruin, let small reversible mistakes happen, and record every stop and escape so the next control goes where actors actually make mistakes.
+
+Three findings from the evidence matter most for review:
+
+- Strength beats count. At Facebook, the same static analysis got almost no fixes as a batch report and over 70% fixes when shown on each change. Prompts that told agents not to cheat on tests changed little; read-only tests stopped test edits.
+- An unproven control is a guess. Factories test error-proofing devices with known-bad parts every shift. Several large outages (Cloudflare 2019, Facebook 2021, CrowdStrike 2024) came from safety controls that had broken or could never fire.
+- Coding agents are actors with their own error profile: they act on every message, follow stale docs literally, game checks they can edit, route around blocks, and repeat the same mistake across runs. One design-level control protects every future run; instructions help some models and not others.
+
+The control strength scale, required strength, control audit, and agent rules are in `references/review-playbook.md` (Control Strength). The research behind them, with sources, is in `docs/mistake-proofing-research.md` in the skill repository.
+
 ## Research Notes
 
 - Taleb's `Antifragile` frames uncertainty, volatility, and error as conditions systems can be designed to benefit from, not only survive.

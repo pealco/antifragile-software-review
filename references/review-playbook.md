@@ -56,6 +56,7 @@ Use this template:
 | State/data mutation | Database writes, migrations, files, caches, external side effects, billing or notification actions. |
 | Dependencies | Services, queues, vendors, regions, models, secrets, CLIs, libraries, feature flags, deploy tools. |
 | Failure handling | Timeouts, retries, budgets, idempotency, compensation, circuit breakers, dead letters, partial-write handling. |
+| Actor error | What a developer, operator, or coding agent can get wrong at this step, the strongest control that stops it (C0-C5), and whether a challenge test or drill proves that control. |
 | Feedback | Metrics, logs, traces, alerts, SLOs, tests, dashboards, runbooks, incident links. |
 | Reversal or degradation | Rollback, dry-run, restore, replay, kill switch, feature flag, graceful degradation, manual repair path. |
 | Ownership | Who receives the alert, approves rollback, maintains the runbook, and pays the cost of fragility. |
@@ -75,6 +76,7 @@ Assess each important design area with these dimensions:
 | Safe experimentation | Every experiment has production-wide blast radius. | Use feature flags, canaries, shadow traffic, sandboxes, kill switches, and contract tests. |
 | Slack and redundancy | The system runs hot, queues are unbounded, and fallback capacity is unknown. | Preserve headroom, bounded queues, load shedding, graceful degradation, and restore drills. |
 | Incident learning | Incidents create cleanup work but no durable learning. | Turn incidents into tests, dashboards, runbook updates, ownership changes, and safer defaults. |
+| Mistake-proofing | People and coding agents can take the wrong action: two sources of truth, unsafe defaults, optional arguments that must always be set, untested runbook commands, misleading names or docs. | Make the wrong action impossible or fail at the source: one source of truth, safe defaults, required arguments, types and schema constraints, startup checks, executable runbooks. |
 | Optionality | A design choice locks in one vendor, schema, protocol, runtime, or team bottleneck. | Introduce replaceable boundaries only where uncertainty is real and carrying cost is justified. |
 
 ## Fragility Response Curves
@@ -111,6 +113,56 @@ Report evidence quality separately from exposure:
 5. Scanner-only or docs-only lead.
 
 High exposure with weak evidence should become a high-priority observation, not an overconfident finding.
+
+## Control Strength
+
+Mistakes are inevitable; harm is not. For each plausible mistake on the traced flow, rate the strongest control that exists today and the one the recommendation adds. The chain is mistake (an actor's wrong action) -> fault (committed into code, config, or data) -> error (wrong run-time state) -> failure (harm) -> ruin (harm that cannot be reversed). The earlier a control acts, the better.
+
+| Level | Name | Meaning | Examples |
+| --- | --- | --- | --- |
+| C5 | Impossible | The mistake cannot be expressed. | Typed IDs, a required argument, no credential for the action, an operation redefined so the error case disappears |
+| C4 | Stopped at the source | Rejected when the mistake is made, before it is committed or runs. | Type error, schema check at ingestion, startup check that rejects unknown config, tool precondition, pre-action hook |
+| C3 | Stopped downstream | Blocked at a later stage, before harm. | Required CI check, required review, canary with automatic abort, capacity floor in the tool |
+| C2 | Warning | A signal the actor can ignore. | Lint warning, confirmation prompt, alert, log line |
+| C1 | Information | Depends on the actor reading and remembering. | Docs, comments, runbook text, `AGENTS.md`, a prompt |
+| C0 | None | | |
+
+Credit only proven controls. A control at C2 or above counts at its level only if a challenge test exists: an automated test that feeds it a known-bad input and asserts that it is rejected. Without one, count it one level lower. A safety path that has never been exercised, such as a kill switch or a restore, counts as C1 at most. A test that cannot fail on the fault it names (for example it uses a wildcard in the one field where the fault lives) is not a challenge test.
+
+Required strength:
+
+| Harm if the chain completes | Required effective strength |
+| --- | --- |
+| Ruin: money moved, data deleted, secrets leaked, product-wide outage | C4 or higher, for every actor who can reach the action |
+| Irreversible but bounded, or reversible only by slow manual repair | C3 or higher |
+| Reversible and bounded | C2; record stops and escapes for learning |
+
+If an agent or other automation can trigger the action repeatedly, raise the requirement by one level, up to C5: per-action risk compounds with the number of actions, and written instructions are not reliable controls for agents. Report the gap (required minus effective).
+
+Audit every control the review relies on:
+
+1. A challenge test exists and runs automatically.
+2. It cannot be bypassed without a visible, counted exception (`--no-verify`, suppressions, escape hatches).
+3. It sits outside the write scope of the actors it constrains, including agents.
+4. It acts at ingestion or at the moment of action, not in the serving path.
+5. It rejects and keeps the last known-good state instead of crashing, and fails safe in the right direction.
+6. It does not live inside the artifact the mistake changes.
+7. Its message names the constraint, the reason, and the fix.
+8. It covers fast paths such as config and data pushes, not only code deploys.
+
+Rules for code that coding agents change and operate:
+
+1. Put controls outside the agent's write scope: protected paths, server-side required checks, agent settings the agent cannot edit.
+2. Constrain effects and states, not command strings. Agents route around a blocked command.
+3. Put the fix in the stop message. Agents read and act on every message.
+4. Give a sanctioned exit, a way to stop and flag the task, so the agent does not work around the control.
+5. Require evidence, not claims: block completion until the check runs and passes.
+6. Show the mode in every tool result: production or development, dry run or live.
+7. Keep one source of truth and check docs in CI. Agents follow stale docs exactly.
+8. Keep examples clean. Agents copy existing patterns.
+9. Credit an instruction (`AGENTS.md`, prompt) only for a model where its effect was measured.
+
+Learning loop: record every stop, override, and suppression as a near miss. When a mistake reaches users, add a control at the earliest stage that could have caught it, with its challenge test. Run challenge tests on a schedule. Before turning a warning into a stop, fix every existing instance first.
 
 ## Domain Playbooks
 
@@ -177,6 +229,10 @@ Trace one ingestion, transform, and publication path. Look for replayability, sc
 
 Treat CLIs as operational machinery. Look for dry-run modes, confirmation boundaries, idempotency, explicit target selection, safe defaults, shell strictness, audit output, and recovery instructions for interrupted runs.
 
+### Code That People And Coding Agents Change
+
+Treat everyone who edits or operates the code as an actor who will make mistakes: developers, on-call engineers, and coding agents. A coding agent trusts names, docs, comments, and tests literally, and it relies on fast local checks to know whether an edit is correct. Look for one name per concept, docs that match the code, invariants enforced by types, schema, or CI instead of prose, a fast deterministic test command, tests that fail when the named behavior breaks, safe defaults for scripts and environments, explicit targets for dangerous commands, markers on generated files, and written repo rules (for example `AGENTS.md`). Prefer a check that fails on the wrong edit over a comment that asks the reader not to make it.
+
 ### Infrastructure And IaC
 
 Review state backends, plan/apply separation, policy checks, secret handling, resource deletion protection, pinned providers/actions/images, concurrency controls, drift detection, and rollback or rebuild paths.
@@ -218,6 +274,7 @@ Examples:
 ## Recommendation Rules
 
 - Prefer removing fragile mechanisms before adding new machinery.
+- State the control strength (C0-C5) today and after the move, whether a challenge test proves it, and the required strength.
 - Tie every recommendation to a stressor and a blast radius.
 - State whether the move is robust, resilient, or antifragile.
 - State the gain mechanism: faster learning, smaller blast radius, cheaper reversal, safer experimentation, dependency optionality, or incident-to-test conversion.
