@@ -95,6 +95,70 @@ def schema_to_sqlite(sql: str) -> str:
     return to_sqlite(sql)
 
 
+MIGRATION_ERRORS: list[str] = []
+
+
+def migration_statements(statement: str) -> list[str]:
+    """One Postgres migration statement -> the SQLite statements that keep its effect.
+
+    SQLite allows one action per ALTER TABLE, cannot add a UNIQUE column or a table CHECK, and
+    has no ALTER COLUMN. Multi-action ALTERs are split; UNIQUE on an added column or in ADD
+    CONSTRAINT becomes a unique index; CHECK constraints and ALTER COLUMN actions are dropped
+    (NOT NULL is dropped everywhere, so they change nothing the challenges rely on)."""
+    s = statement.strip()
+    m = re.match(
+        r"ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(\w+)\s+(.*)$",
+        s,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if not m:
+        return [schema_to_sqlite(s)]
+    table, actions = m.group(1), m.group(2)
+    out: list[str] = []
+    depth, start = 0, 0
+    parts: list[str] = []
+    for i, ch in enumerate(actions):  # split on commas outside parentheses
+        depth += (ch == "(") - (ch == ")")
+        if ch == "," and depth == 0:
+            parts.append(actions[start:i])
+            start = i + 1
+    parts.append(actions[start:])
+    for action in (a.strip() for a in parts if a.strip()):
+        add = re.match(
+            r"ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s+(.*)$",
+            action,
+            re.IGNORECASE | re.DOTALL,
+        )
+        constraint = re.match(
+            r"ADD\s+CONSTRAINT\s+(\w+)\s+(UNIQUE|CHECK|PRIMARY\s+KEY|FOREIGN\s+KEY)\s*(\(.*\))?",
+            action,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if constraint:
+            if constraint.group(2).upper() == "UNIQUE" and constraint.group(3):
+                out.append(
+                    f"CREATE UNIQUE INDEX IF NOT EXISTS {constraint.group(1)} ON {table} {constraint.group(3)}"
+                )
+            continue  # CHECK / FK constraints cannot be added to an existing SQLite table
+        if add and add.group(1).upper() != "CONSTRAINT":
+            column, spec = add.group(1), add.group(2)
+            if re.search(r"\bUNIQUE\b", spec, re.IGNORECASE):
+                spec = re.sub(r"\bUNIQUE\b", "", spec, flags=re.IGNORECASE)
+                out.append(
+                    f"CREATE UNIQUE INDEX IF NOT EXISTS {table}_{column}_unique ON {table} ({column})"
+                )
+            out.insert(
+                len(out)
+                - (1 if out and out[-1].startswith("CREATE UNIQUE INDEX") else 0),
+                schema_to_sqlite(f"ALTER TABLE {table} ADD COLUMN {column} {spec}"),
+            )
+            continue
+        if re.match(r"ALTER\s+(COLUMN\s+)?", action, re.IGNORECASE):
+            continue  # SET/DROP NOT NULL, SET/DROP DEFAULT, TYPE: not expressible, not relied on
+        out.append(schema_to_sqlite(f"ALTER TABLE {table} {action}"))
+    return out
+
+
 def adapt(value):
     import datetime as dt
 
@@ -244,11 +308,19 @@ def create_database(project: Path, path: str) -> None:
     for migration in sorted((project / "db" / "migrations").glob("*.sql")):
         text = re.sub(r"--[^\n]*", "", migration.read_text(encoding="utf-8"))
         for statement in text.split(";"):
-            if statement.strip():
+            if not statement.strip():
+                continue
+            for translated in migration_statements(statement):
                 try:
-                    db.execute(schema_to_sqlite(statement))
-                except sqlite3.Error:
-                    pass  # a statement SQLite cannot express; keep going
+                    db.execute(translated)
+                except sqlite3.Error as exc:
+                    if "no such column" in str(exc) and re.search(
+                        r"DROP\s+COLUMN", translated, re.IGNORECASE
+                    ):
+                        continue  # DROP COLUMN IF EXISTS on a column that was never added
+                    MIGRATION_ERRORS.append(
+                        f"{migration.name}: {exc}: {' '.join(translated.split())[:100]}"
+                    )
     earned = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=10)).isoformat()
     db.execute("INSERT INTO sellers (id, email, display_name, bank_account_ref, payouts_paused) "
                "VALUES (1, 's@example.test', 'S', 'acct_1', 0)")  # fmt: skip
@@ -410,6 +482,8 @@ def simulate(scenario: str, project: Path) -> dict:
     }
     if Conn.sql_errors:
         result["sql_errors"] = Conn.sql_errors[:3]
+    if MIGRATION_ERRORS:
+        result["migration_errors"] = MIGRATION_ERRORS[:3]
     return result
 
 

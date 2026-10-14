@@ -224,6 +224,32 @@ class PayoutChallengesTest(unittest.TestCase):
         self.assertTrue(passes("payouts-lost-responses", self.project))
         self.assertTrue(passes("payouts-retry-key", self.project))
 
+    def test_postgres_multi_action_alter_is_applied(self) -> None:
+        """Hardenings add columns with Postgres ALTER forms SQLite lacks; the harness must keep
+        the columns and the UNIQUE, and report anything it had to drop rather than hide it."""
+        apply_stable_key(self.project)
+        (self.project / "db" / "migrations" / "006_payout_claims.sql").write_text(
+            """
+ALTER TABLE payouts
+    ADD COLUMN status text NOT NULL DEFAULT 'sent' CHECK (status IN ('pending', 'sent', 'rejected')),
+    ADD COLUMN idempotency_key text UNIQUE,
+    ALTER COLUMN bank_transfer_id DROP NOT NULL,
+    ADD CONSTRAINT payouts_sent_has_transfer CHECK (status <> 'sent' OR bank_transfer_id IS NOT NULL);
+UPDATE payouts SET idempotency_key = 'legacy:' || id WHERE idempotency_key IS NULL;
+ALTER TABLE payouts ALTER COLUMN status DROP DEFAULT, ALTER COLUMN idempotency_key SET NOT NULL;
+""",
+            encoding="utf-8",
+        )
+        edit(self.project, "payouts/runner.py",
+             '"INSERT INTO payouts (seller_id, period, amount_cents, bank_transfer_id) VALUES (%s, %s, %s, %s)",',
+             '"INSERT INTO payouts (seller_id, period, amount_cents, bank_transfer_id, status, idempotency_key) '
+             'VALUES (%s, %s, %s, %s, \'sent\', %s)",')  # fmt: skip
+        edit(self.project, "payouts/runner.py",
+             '[seller["id"], period, balance, transfer["id"]],',
+             '[seller["id"], period, balance, transfer["id"], f"payout-{seller[\'id\']}-{period}"],')  # fmt: skip
+        self.assertTrue(passes("payouts-retry-key", self.project))
+        self.assertTrue(passes("payouts-lost-responses", self.project))
+
     def test_stopping_all_payouts_fails_both(self) -> None:
         edit(
             self.project,
