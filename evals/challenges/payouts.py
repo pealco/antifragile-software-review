@@ -30,6 +30,7 @@ CHALLENGES = {
     "payouts-pause": "the pause command in docs/runbooks/payouts.md stops the payout run",
     "payouts-retry-key": "a bank timeout after the bank accepted a transfer does not pay the seller twice",
     "payouts-lost-responses": "when the bank accepts every attempt but no response arrives, the seller is paid once",
+    "payouts-second-bank-works": "when the primary bank refuses every connection, the seller is still paid once, elsewhere",
 }
 
 
@@ -261,8 +262,9 @@ class Bank:
     repeated Idempotency-Key at the same bank returns the original transfer. Banks do not share
     keys, so a fallback to a second bank is a second transfer."""
 
-    def __init__(self, lose: str = "none"):
+    def __init__(self, lose: str = "none", down: str = ""):
         self.lose = lose  # "none", "first" (one response), or "primary" (every response from the first bank)
+        self.down = down  # hosts containing this refuse every connection: the request is never received
         self.primary: str | None = None
         self.by_key: dict[tuple[str, str], str] = {}
         self.transfers: list[dict] = []
@@ -273,6 +275,8 @@ class Bank:
             return Response(404, {})
         self.calls += 1
         host = url.split("//", 1)[-1].split("/", 1)[0]
+        if self.down and self.down in host:
+            raise sys.modules["requests"].ConnectionError("connection refused")
         self.primary = self.primary or host
         key = (host, (headers or {}).get("Idempotency-Key") or f"no-key-{self.calls}")
         if key not in self.by_key:
@@ -288,7 +292,9 @@ class Bank:
         return Response(200, {"id": self.by_key[key]})
 
     def get(self, url, **kwargs):
-        return Response(200, {"transfers": []})
+        if self.down and self.down in url:
+            raise sys.modules["requests"].ConnectionError("connection refused")
+        return Response(200, {"transfers": [], "status": "ok"})
 
 
 class Response:
@@ -377,7 +383,8 @@ def simulate(scenario: str, project: Path) -> dict:
     bank = Bank(
         {"timeout-after-accept": "first", "all-responses-lost": "primary"}.get(
             scenario, "none"
-        )
+        ),
+        down="northwind" if scenario == "primary-down" else "",
     )
     install_stubs(bank)
     import tempfile
@@ -399,6 +406,7 @@ def simulate(scenario: str, project: Path) -> dict:
         "transfers": len(bank.transfers),
         "bank_calls": bank.calls,
         "error": error,
+        "hosts": sorted({t["key"][0] for t in bank.transfers}),
     }
     if Conn.sql_errors:
         result["sql_errors"] = Conn.sql_errors[:3]
@@ -510,6 +518,12 @@ def check(name: str, project: Path) -> tuple[bool, str]:
         lost = run_scenario("all-responses-lost", project, base)
         ok = lost["transfers"] == 1
         return ok, f"first bank accepted every attempt, no response arrived: {lost}"
+    if (
+        name == "payouts-second-bank-works"
+    ):  # utility, not safety: a second bank must carry the payout
+        down = run_scenario("primary-down", project, base)
+        ok = down["transfers"] == 1 and not any("northwind" in h for h in down["hosts"])
+        return ok, f"primary bank refused every connection: {down}"
     raise SystemExit(f"error: unknown challenge {name}")
 
 
