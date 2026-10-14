@@ -106,6 +106,31 @@ except Exception: pass
         self.assertEqual(["feedback_delay"], scan["findings"][0]["exposure_dimensions"])
         self.assertIn("lost learning", scan["findings"][0]["scanner_value"])
 
+    def test_detects_two_line_swallowed_exception(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_file(
+                root,
+                "metrics.py",
+                """
+try:
+    send()
+except Exception:
+    pass
+
+try:
+    send()
+except ValueError:
+    log(error)
+""",
+            )
+
+            scan = run_scan(root)
+
+        found = [(f["line"], f["pattern_id"]) for f in scan["findings"]]
+        self.assertEqual([(4, "silent-exception")], found)
+        self.assertEqual(["ruff:BLE001", "ruff:S110"], scan["findings"][0]["linter_overlaps"])
+
     def test_inline_suppression_can_ignore_one_pattern_or_a_whole_line(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

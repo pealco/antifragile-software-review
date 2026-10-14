@@ -998,7 +998,8 @@ def find_pattern_matches(
         pattern_counts[finding.pattern_id] = pattern_counts.get(finding.pattern_id, 0) + 1
         findings.append(finding)
 
-    for line_number, line in enumerate(text.splitlines(), start=1):
+    lines = text.splitlines()
+    for line_number, line in enumerate(lines, start=1):
         stripped = line.strip()
         if not stripped:
             continue
@@ -1013,7 +1014,10 @@ def find_pattern_matches(
                 continue
             if pattern.id == "hardcoded-endpoint" and path.suffix.lower() in {".md", ".txt"}:
                 continue
-            if regex.search(search_line):
+            candidate = search_line
+            if pattern.id == "silent-exception":
+                candidate = join_handler_body(lines, line_number, search_line)
+            if regex.search(candidate):
                 if pattern_counts.get(pattern.id, 0) >= max_per_pattern:
                     omitted_counts[pattern.id] = omitted_counts.get(pattern.id, 0) + 1
                     continue
@@ -1028,10 +1032,10 @@ def find_pattern_matches(
                         category=pattern.category,
                         concept=pattern.concept,
                         why=pattern.why,
-                        linter_overlaps=linter_overlaps_for_pattern(pattern, search_line),
+                        linter_overlaps=linter_overlaps_for_pattern(pattern, candidate),
                         exposure_dimensions=exposure_dimensions_for(pattern.category, pattern.exposure_dimensions),
                         scanner_value=pattern.scanner_value,
-                        snippet=stripped[:220],
+                        snippet=candidate.strip()[:220],
                     )
                 )
 
@@ -1046,6 +1050,17 @@ def find_pattern_matches(
             findings.append(finding)
 
     return findings
+
+
+def join_handler_body(lines: list[str], line_number: int, line: str) -> str:
+    """Join `except ...:` with the next non-blank line, so the common two-line form
+    `except Exception:` / `pass` matches like the one-line form."""
+    if not re.match(r"^\s*except\b[^#]*:\s*$", line):
+        return line
+    for following in lines[line_number:]:
+        if following.strip():
+            return f"{line.rstrip()} {following.strip()}"
+    return line
 
 
 def custom_file_findings(
