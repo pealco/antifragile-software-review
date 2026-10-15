@@ -63,6 +63,17 @@ class OutputEvalsTest(unittest.TestCase):
                         ).is_file(),
                         check,
                     )
+                elif check.startswith("mutant:"):
+                    spec = json.loads(
+                        (
+                            ROOT / "evals" / "mutants" / f"{case['fixture']}.json"
+                        ).read_text()
+                    )
+                    mutant = spec[check.removeprefix("mutant:")]
+                    source = (
+                        ROOT / "evals" / "fixtures" / case["fixture"] / mutant["file"]
+                    ).read_text()
+                    self.assertEqual(1, source.count(mutant["old"]), check)
                 elif check.startswith("challenge:"):
                     name = check.removeprefix("challenge:")
                     script = CHALLENGE_SCRIPTS / f"{name.split('-')[0]}.py"

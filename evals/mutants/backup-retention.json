@@ -1,0 +1,17 @@
+{
+  "daily-window": {
+    "file": "retention/policy.py",
+    "old": "        if age < 7:\n            keep.add(b.name)",
+    "new": "        if age < 6:\n            keep.add(b.name)"
+  },
+  "weekly-newest": {
+    "file": "retention/policy.py",
+    "old": "b.taken > newest_in_week[week].taken",
+    "new": "b.taken < newest_in_week[week].taken"
+  },
+  "delete-all-guard": {
+    "file": "retention/prune.py",
+    "old": "if len(doomed) == len(backups) and backups:",
+    "new": "if len(doomed) > len(backups) and backups:"
+  }
+}

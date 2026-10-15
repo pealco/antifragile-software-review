@@ -32,6 +32,8 @@ FIXTURES = ROOT / "evals" / "fixtures"
 GOLDEN = ROOT / "evals" / "golden"
 EVIDENCE_CHECKER = ROOT / "scripts" / "check_review_evidence.py"
 CHALLENGES = ROOT / "evals" / "challenges"
+MUTANTS = ROOT / "evals" / "mutants"
+DEFAULT_TEST_COMMAND = "python3 -m unittest discover -s tests"
 RUN_TIMEOUT_S = 900
 MAX_TURNS = 40
 MAX_GRADER_CHARS = 60_000  # keep the grader prompt well inside its context
@@ -204,6 +206,39 @@ def run_check(name: str, project: Path, run: dict) -> bool:
             for f in changed_files(project)
         )
     if name.startswith(
+        "mutant:"
+    ):  # the tests the agent left must fail on a seeded fault
+        spec = json.loads(
+            (MUTANTS / f"{run['fixture']}.json").read_text(encoding="utf-8")
+        )[name.removeprefix("mutant:")]
+        command = run.get("test_command") or DEFAULT_TEST_COMMAND
+        target = project / spec["file"]
+        original = target.read_text(encoding="utf-8")
+        detail = run.setdefault("mutant_detail", {})
+        if original.count(spec["old"]) != 1:
+            detail[name] = "mutation site changed; cannot apply"
+            return False
+        passes_clean = (
+            subprocess.run(
+                command, shell=True, cwd=project, capture_output=True, check=False
+            ).returncode
+            == 0
+        )
+        target.write_text(original.replace(spec["old"], spec["new"]), encoding="utf-8")
+        try:
+            passes_mutated = (
+                subprocess.run(
+                    command, shell=True, cwd=project, capture_output=True, check=False
+                ).returncode
+                == 0
+            )
+        finally:
+            target.write_text(original, encoding="utf-8")
+        detail[name] = (
+            f"suite {'passes' if passes_clean else 'FAILS'} unmutated, {'passes' if passes_mutated else 'fails'} with the fault"
+        )
+        return passes_clean and not passes_mutated
+    if name.startswith(
         "challenge:"
     ):  # a known-bad case the repo must now reject (evals/challenges/)
         challenge = name.removeprefix("challenge:")
@@ -273,9 +308,11 @@ def one_run(job: tuple[dict, bool, int], args: argparse.Namespace, name: str) ->
         }
         if run["error"]:
             return out
+        run["fixture"], run["test_command"] = case["fixture"], case.get("test_command")
         out["checks"] = {c: run_check(c, project, run) for c in case["checks"]}
-        if "challenge_detail" in run:
-            out["challenge_detail"] = run["challenge_detail"]
+        for key in ("challenge_detail", "mutant_detail"):
+            if key in run:
+                out[key] = run[key]
         out["assertions"] = grade_assertions(case, project, run, args.grader_model)
         return out
     finally:
