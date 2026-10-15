@@ -46,6 +46,7 @@ This repository contains:
 - `examples/scorecard-review.md`: a compact example of the review scorecard filled out for a realistic service.
 - `evals/`: scanner-and-golden-file checks that run in CI, plus model-in-the-loop evals for triggering and review quality (see Skill Evals).
 - `scripts/check_review_evidence.py`: checks that every file and line a review cites on an `Evidence:` line exists. `SKILL.md` tells the agent to run it before it sends a review.
+- `scripts/check_test_strength.py`: stubs each function out (`return None`, then `return True`) and reruns the test suite; a function whose stub the suite tolerates has no test that depends on its logic. The scanner's `test-*` rules flag the static shapes of a test that cannot fail: an expected value computed by the code under test, loose or call-only assertions, no assertion at all, fixed sleeps, swallowed exceptions, and skips without a reason.
 - `docs/mistake-proofing-research.md`: the research behind the mistake-proofing method (poka-yoke, safety science, software practice, coding agents), the control strength scale, and how the method is measured.
 - `evals/challenges/`: challenge tests that feed a known-bad case to a repository after an agent changed it and check that the mistake no longer gets through; `evals/run_agent_trap_evals.py` runs later coding agents against hardened repositories, with tasks from `evals/agent_traps*.json`, and reports whether their changes reopen the mistake.
 

@@ -1,6 +1,6 @@
 # Antifragile Scanner Rules
 
-47 rule(s). Empty language lists mean the rule can apply across supported text languages.
+54 rule(s). Empty language lists mean the rule can apply across supported text languages.
 
 ## bare-except
 
@@ -376,6 +376,72 @@
 - Why it matters: Wildcard IAM actions or resources can concentrate privilege and expand blast radius.
 - Scanner value: Flags Terraform IAM optionality and downside-concentration leads without replacing policy analyzers.
 
+## test-call-only-assertion
+
+- Category: Silent failure and lost learning
+- Concept: skin in the game / feedback
+- Source kinds: tests
+- Languages: any
+- Exposure dimensions: feedback_delay
+- Linter overlaps: none
+- Why it matters: Asserting only that a call happened leaves the payload unchecked, so a wrong value passes.
+- Scanner value: Lead for tests that check a mock was touched instead of what it received.
+
+## test-loose-assertion
+
+- Category: Silent failure and lost learning
+- Concept: skin in the game / feedback
+- Source kinds: tests
+- Languages: any
+- Exposure dimensions: feedback_delay
+- Linter overlaps: none
+- Why it matters: An assertion that any non-empty result satisfies still passes when the result is wrong.
+- Scanner value: Flags assertions a stub that returns a constant would pass; assert the exact result users see.
+
+## test-self-referential-expected
+
+- Category: Silent failure and lost learning
+- Concept: skin in the game / feedback
+- Source kinds: tests
+- Languages: any
+- Exposure dimensions: feedback_delay
+- Linter overlaps: none
+- Why it matters: A test whose expected value is computed by the code under test passes for every implementation, right or wrong.
+- Scanner value: A test that cannot fail on the fault it names is not a control; replace the expected value with a literal.
+
+## test-skipped-without-reason
+
+- Category: Silent failure and lost learning
+- Concept: skin in the game / feedback
+- Source kinds: tests
+- Languages: any
+- Exposure dimensions: feedback_delay
+- Linter overlaps: none
+- Why it matters: A skipped test with no stated reason is a control that has been switched off and may never come back.
+- Scanner value: Lead for disabled tests; a skip needs a reason and an owner.
+
+## test-sleep
+
+- Category: Prediction and timing dependence
+- Concept: prediction dependence
+- Source kinds: tests
+- Languages: any
+- Exposure dimensions: feedback_delay, dependency_concentration
+- Linter overlaps: none
+- Why it matters: A test that waits a fixed time passes or fails on machine speed, and a flaky test is a warning nobody trusts.
+- Scanner value: Fixed waits are the most common root cause of flaky tests; wait on a condition instead.
+
+## test-swallowed-exception
+
+- Category: Silent failure and lost learning
+- Concept: skin in the game / feedback
+- Source kinds: tests
+- Languages: any
+- Exposure dimensions: feedback_delay
+- Linter overlaps: none
+- Why it matters: A test that catches and discards an exception cannot fail on the error it hides.
+- Scanner value: Tests that swallow errors pass on crashes; let the exception propagate or assert it.
+
 ## todo-debt
 
 - Category: Known fragility markers
@@ -518,3 +584,14 @@
 - Linter overlaps: none
 - Why it matters: Shell scripts without strict error handling can continue after failed commands and lose failure evidence.
 - Scanner value: Checks a shell-script-level failure mode that line linters may not frame as operational feedback loss.
+
+## test-without-assertion
+
+- Category: Silent failure and lost learning
+- Concept: skin in the game / feedback
+- Source kinds: tests
+- Languages: python
+- Exposure dimensions: none
+- Linter overlaps: none
+- Why it matters: A test function with no assertion passes whatever the code does; it measures only that nothing raised.
+- Scanner value: AST check of Python test functions for an assert statement, an assert* call, a raises context, or fail().

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import fnmatch
 import json
 import os
@@ -599,6 +600,60 @@ PATTERNS = [
         r"\b(TODO|FIXME|HACK|XXX|workaround|temporary)\b",
         "Known debt is often the cheapest place to remove fragility first.",
     ),
+    Pattern(
+        "test-self-referential-expected",
+        "Silent failure and lost learning",
+        "skin in the game / feedback",
+        r"assert(?:Equal|Equals|Is|AlmostEqual)?\(\s*([A-Za-z_][\w.]*\([^()]*\))\s*,\s*\1\s*\)|\bassert\s+([A-Za-z_][\w.]*\([^()]*\))\s*==\s*\2\b|expect\(\s*([A-Za-z_][\w.]*\([^()]*\))\s*\)\.(?:toBe|toEqual|toStrictEqual)\(\s*\3\s*\)",
+        "A test whose expected value is computed by the code under test passes for every implementation, right or wrong.",
+        source_kinds=("tests",),
+        scanner_value="A test that cannot fail on the fault it names is not a control; replace the expected value with a literal.",
+    ),
+    Pattern(
+        "test-loose-assertion",
+        "Silent failure and lost learning",
+        "skin in the game / feedback",
+        r"assertTrue\(\s*True\s*\)|\bassert\s+True\b|assertIsNotNone\(|assertIsNone\(|\.toBeDefined\(\)|\.toBeUndefined\(\)|\.toBeTruthy\(\)|\.not\.toThrow\(\)|assertGreater\([^,]+,\s*0\s*\)|\.toBeGreaterThan\(\s*0\s*\)",
+        "An assertion that any non-empty result satisfies still passes when the result is wrong.",
+        source_kinds=("tests",),
+        scanner_value="Flags assertions a stub that returns a constant would pass; assert the exact result users see.",
+    ),
+    Pattern(
+        "test-call-only-assertion",
+        "Silent failure and lost learning",
+        "skin in the game / feedback",
+        r"\.toHaveBeenCalled\(\)|\.not\.toHaveBeenCalled\(\)|\.assert_called\(\)|\.assert_called_once\(\)|\.assert_not_called\(\)",
+        "Asserting only that a call happened leaves the payload unchecked, so a wrong value passes.",
+        source_kinds=("tests",),
+        scanner_value="Lead for tests that check a mock was touched instead of what it received.",
+    ),
+    Pattern(
+        "test-sleep",
+        "Prediction and timing dependence",
+        "prediction dependence",
+        r"\btime\.sleep\(|\bsleep\s*\(\s*\d|\bsetTimeout\(|\bawait\s+sleep\(",
+        "A test that waits a fixed time passes or fails on machine speed, and a flaky test is a warning nobody trusts.",
+        source_kinds=("tests",),
+        scanner_value="Fixed waits are the most common root cause of flaky tests; wait on a condition instead.",
+    ),
+    Pattern(
+        "test-swallowed-exception",
+        "Silent failure and lost learning",
+        "skin in the game / feedback",
+        r"except\b[^:]*:\s*(?:pass|return|continue)\b|catch\s*(?:\([^)]*\))?\s*\{\s*\}",
+        "A test that catches and discards an exception cannot fail on the error it hides.",
+        source_kinds=("tests",),
+        scanner_value="Tests that swallow errors pass on crashes; let the exception propagate or assert it.",
+    ),
+    Pattern(
+        "test-skipped-without-reason",
+        "Silent failure and lost learning",
+        "skin in the game / feedback",
+        r"@(?:unittest\.)?skip\(\s*\)|@pytest\.mark\.(?:skip|xfail)\s*$|\b(?:it|test|describe)\.skip\(|\bx(?:it|test|describe)\(",
+        "A skipped test with no stated reason is a control that has been switched off and may never come back.",
+        source_kinds=("tests",),
+        scanner_value="Lead for disabled tests; a skip needs a reason and an owner.",
+    ),
 ]
 
 
@@ -806,6 +861,17 @@ def exposure_dimensions_for(category: str, dimensions: tuple[str, ...] = ()) -> 
 
 
 CUSTOM_RULES = (
+    RuleInfo(
+        "test-without-assertion",
+        "Silent failure and lost learning",
+        "skin in the game / feedback",
+        "A test function with no assertion passes whatever the code does; it measures only that nothing raised.",
+        ("tests",),
+        ("python",),
+        (),
+        (),
+        "AST check of Python test functions for an assert statement, an assert* call, a raises context, or fail().",
+    ),
     RuleInfo(
         "shell-missing-strict-mode",
         "Silent failure and lost learning",
@@ -1015,7 +1081,7 @@ def find_pattern_matches(
             if pattern.id == "hardcoded-endpoint" and path.suffix.lower() in {".md", ".txt"}:
                 continue
             candidate = search_line
-            if pattern.id == "silent-exception":
+            if pattern.id in ("silent-exception", "test-swallowed-exception"):
                 candidate = join_handler_body(lines, line_number, search_line)
             if regex.search(candidate):
                 if pattern_counts.get(pattern.id, 0) >= max_per_pattern:
@@ -1063,6 +1129,39 @@ def join_handler_body(lines: list[str], line_number: int, line: str) -> str:
     return line
 
 
+def python_tests_without_assertions(text: str) -> list[tuple[int, str]]:
+    """Line and name of each test function that makes no assertion."""
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return []
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or not node.name.startswith("test"):
+            continue
+        asserts = False
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.Assert):
+                asserts = True
+            elif isinstance(sub, ast.Call):
+                target = sub.func
+                name = target.attr if isinstance(target, ast.Attribute) else getattr(target, "id", "")
+                if name.startswith("assert") or name in {"raises", "fail", "expect", "verify", "snapshot"}:
+                    asserts = True
+            elif isinstance(sub, ast.With):
+                for item in sub.items:
+                    call = item.context_expr
+                    func = call.func if isinstance(call, ast.Call) else None
+                    attr = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+                    if attr in {"raises", "assertRaises", "assertRaisesRegex", "warns"}:
+                        asserts = True
+            if asserts:
+                break
+        if not asserts:
+            found.append((node.lineno, node.name))
+    return found
+
+
 def custom_file_findings(
     root: Path,
     path: Path,
@@ -1072,7 +1171,7 @@ def custom_file_findings(
 ) -> list[Finding]:
     findings: list[Finding] = []
 
-    if source_kind not in {"code", "config"}:
+    if source_kind not in {"code", "config", "tests"}:
         return findings
 
     def add(
@@ -1103,6 +1202,20 @@ def custom_file_findings(
                 snippet=snippet,
             )
         )
+
+    if source_kind == "tests":
+        if language == "python":
+            for line_number, name in python_tests_without_assertions(text):
+                add(
+                    "test-without-assertion",
+                    "Silent failure and lost learning",
+                    "skin in the game / feedback",
+                    "A test function with no assertion passes whatever the code does; it measures only that nothing raised.",
+                    "AST check of Python test functions for an assert statement, an assert* call, a raises context, or fail().",
+                    line_number,
+                    f"def {name}(...): no assertion",
+                )
+        return findings
 
     if language == "shell" and not shell_strict_mode_present(text):
         line_number, snippet = first_nonempty_line(text)

@@ -131,6 +131,64 @@ except ValueError:
         self.assertEqual([(4, "silent-exception")], found)
         self.assertEqual(["ruff:BLE001", "ruff:S110"], scan["findings"][0]["linter_overlaps"])
 
+    def test_flags_tests_that_cannot_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_file(
+                root,
+                "tests/test_money.py",
+                """
+import time
+import unittest
+from app.money import tax, label, send
+
+
+class MoneyTest(unittest.TestCase):
+    def test_tax_tautology(self):
+        self.assertEqual(tax(100, 5), tax(100, 5))
+
+    def test_label_exists(self):
+        self.assertIsNotNone(label(1))
+
+    def test_send_was_called(self):
+        send.assert_called_once()
+
+    def test_eventually(self):
+        time.sleep(2)
+        self.assertEqual(1, tax(100, 100))
+
+    def test_never_raises(self):
+        try:
+            send()
+        except Exception:
+            pass
+
+    @unittest.skip()
+    def test_later(self):
+        self.assertEqual(2, tax(200, 100))
+
+    def test_runs(self):
+        tax(100, 5)
+
+    def test_real(self):
+        self.assertEqual(5, tax(100, 500))
+""",
+            )
+            write_file(root, "app/money.py", "def tax(c, b):\n    return c * b // 10_000\n")
+
+            scan = run_scan(root)
+
+        by_pattern = {}
+        for finding in scan["findings"]:
+            by_pattern.setdefault(finding["pattern_id"], []).append(finding["line"])
+        self.assertEqual([9], by_pattern["test-self-referential-expected"])
+        self.assertEqual([12], by_pattern["test-loose-assertion"])
+        self.assertEqual([15], by_pattern["test-call-only-assertion"])
+        self.assertEqual([18], by_pattern["test-sleep"])
+        self.assertEqual([24], by_pattern["test-swallowed-exception"])
+        self.assertEqual([27], by_pattern["test-skipped-without-reason"])
+        self.assertEqual([21, 31], by_pattern["test-without-assertion"])  # the swallowing test asserts nothing either
+
     def test_inline_suppression_can_ignore_one_pattern_or_a_whole_line(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
