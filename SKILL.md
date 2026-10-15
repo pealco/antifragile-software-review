@@ -3,7 +3,7 @@ name: antifragile-software-review
 description: Use when the user wants to find, rank, or reduce what would hurt a software system under stress, even if they never say antifragile. Covers irreversible or hard-to-undo operations (data migrations, bulk updates, deploys), single points of failure, missing rollback or feedback loops, outages or incidents that never become tests or alerts, dependency and vendor lock-in decisions, and applying Taleb's antifragility ideas to a codebase or architecture. Reviews the repository, traces one critical flow, scores exposure, then either reports findings (for audit wording such as review or assess) or patches the highest-risk reversible issue (for action wording such as harden, fix, or make). Takes a repo path or focus. Not for line-level bug review, security audits, performance tuning, or narrow feature work.
 argument-hint: "[repo-path or focus]"
 compatibility: Requires Python 3.10+ for the bundled scripts. Needs no network access.
-allowed-tools: Bash(python3 *skills/antifragile-software-review/scripts/antifragile_scan.py*) Bash(python3 *skills/antifragile-software-review/scripts/check_review_evidence.py*)
+allowed-tools: Bash(python3 *skills/antifragile-software-review/scripts/antifragile_scan.py*) Bash(python3 *skills/antifragile-software-review/scripts/check_review_evidence.py*) Bash(python3 *skills/antifragile-software-review/scripts/check_test_strength.py*)
 ---
 
 # Antifragile Software Review
@@ -69,6 +69,14 @@ The generated rule catalog lives in `references/scanner-rules.md`. Use it when r
 
 Add `antifragile-scan: ignore` or `antifragile-scan: ignore[pattern-id]` on a line only when the signal is intentionally reviewed and harmless.
 
+For the modules on the traced critical flow, find the functions no test depends on. The checker stubs each function out and reruns the suite in a copy of the repository; a function the suite tolerates stubbed has no test control:
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/scripts/check_test_strength.py" /path/to/repo --include 'app/critical/*.py'
+```
+
+Pass `--tests "<command>"` when the suite does not run with `python3 -m unittest discover -s tests`. If the suite does not pass unmutated, say so instead of drawing conclusions.
+
 7. Search manually for antifragility failure modes:
    - Silent failure: swallowed exceptions, empty catches, ignored errors, best-effort paths with no metric or alert.
    - Downside concentration: single process, region, queue, database, credential, deploy path, owner, or global state whose failure cascades.
@@ -82,6 +90,7 @@ Add `antifragile-scan: ignore` or `antifragile-scan: ignore[pattern-id]` on a li
    - Incident amnesia: incidents create tickets or cleanup work but no regression tests, dashboards, runbook updates, ownership changes, safer defaults, or devices that make the same mistake impossible.
    - Mistake-prone design: two sources of truth for one fact, defaults that are unsafe to leave in place, arguments that must always be set but are optional, and invalid states that the types or schema allow.
    - Unproven controls: kill switches, restores, rollbacks, validators, and guards that no test or drill has ever exercised, and tests that cannot fail on the fault they name (for example tests that use a wildcard in the one field where the fault lives).
+   - Tests that cannot fail: expected values computed by the code under test, assertions a stub would satisfy, mocks checked only for having been called, tests with no assertion, flaky tests, skips without a reason. Rate tests with the T0-T5 scale in `references/review-playbook.md` (Tests As Controls); a suite of such tests is not evidence that the code is correct.
    - Agent-hostile code: one name for two things or two names for one thing, docs or comments that contradict the code, behavior configured far from where it runs, no fast local check (tests need production services or are flaky), tests that pass while the behavior they name is broken, dangerous commands that run by default or without an explicit target, generated files with no marker, and repo rules that are not written down for agents. Apply the agent rules in `references/review-playbook.md` (Control Strength).
 
 8. Map evidence to antifragile levers.
@@ -110,6 +119,7 @@ Add `antifragile-scan: ignore` or `antifragile-scan: ignore[pattern-id]` on a li
    - Patch one or more small, high-leverage changes that bound downside or create learning.
    - Add validation that will fail if the fragility comes back: regression tests, scanner tests, CI checks, metrics assertions, dry-run checks, or documented verification commands.
    - Protect the invariant, not the instance. Name the rule the bug broke in terms of the harm (for example "at most one charge per order" or "no production write from a development credential"), not the line where you found it. Enforce the rule at the point every path to the harm must pass, usually shared state: a record claimed under a unique key before the side effect, a database constraint, or one gateway function that owns the side effect. A fix on the path where you found the bug protects only that path; a later change can add another path to the same harm and skip it. Where you can, make the challenge test reach the harm through a path other than the one you fixed.
+   - Every test you add states its expected value as a literal taken from the specification, the issue, or the incident, calls the code as its users do, and is shown to fail on the code before your fix or on a stubbed or mutated version of the function it guards. Report that proof. A test that has only been seen passing is not evidence.
    - When the patch adds a control, add its challenge test: a test that feeds the known-bad case (for example the input one past the limit, or the input a past incident recorded) and asserts the control rejects it. Confirm it fails on the original code and passes on the patched code. Keep a known-good case passing too, so the control does not block correct work.
    - Re-run the relevant tests, scanner, and format/lint commands. If validation cannot run, say exactly what blocked it.
    - Report what changed, what now catches regressions, and any remaining higher-risk backlog items.

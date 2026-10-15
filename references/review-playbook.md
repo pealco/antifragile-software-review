@@ -139,7 +139,7 @@ Required strength:
 
 If an agent or other automation can trigger the action repeatedly, raise the requirement by one level, up to C5: per-action risk compounds with the number of actions, and written instructions are not reliable controls for agents. Report the gap (required minus effective).
 
-Protect the invariant, not the instance. State the rule a control enforces in terms of the harm (at most one charge per order; no deletion without a retention period), and put the control where every path to that harm must pass, usually shared state: a unique claim recorded before the side effect, a constraint, or one gateway that owns the side effect. Rate a control per path. A control on the path where the bug was found is C4 or C5 for that path and C0 for every other path, including paths a later change adds.
+Protect the invariant, not the instance. State the rule a control enforces in terms of the harm (at most one charge per order; no deploy of an unreviewed change), and put the control where every path to that harm must pass, usually shared state: a unique claim recorded before the side effect, a constraint, or one gateway that owns the side effect. Rate a control per path. A control on the path where the bug was found is C4 or C5 for that path and C0 for every other path, including paths a later change adds.
 
 Audit every control the review relies on:
 
@@ -165,6 +165,47 @@ Rules for code that coding agents change and operate:
 9. Credit an instruction (`AGENTS.md`, prompt) only for a model where its effect was measured.
 
 Learning loop: record every stop, override, and suppression as a near miss. When a mistake reaches users, add a control at the earliest stage that could have caught it, with its challenge test. Run challenge tests on a schedule. Before turning a warning into a stop, fix every existing instance first.
+
+## Tests As Controls
+
+A test is a control. It earns credit only if it fails when the code it guards is wrong; a test that passes for every implementation measures nothing, whatever the coverage report says. Coverage records that code ran, not that anything checked the result: in studies of open-source Java projects, 1% to 46% of covered methods per project (9% overall) could have their body replaced by a constant without any test failing. Rate tests like other controls.
+
+| Level | Name | What it would catch | Examples |
+| --- | --- | --- | --- |
+| T0 | None | Nothing | No test touches the behavior |
+| T1 | Exists | A crash only | Calls the code and asserts nothing, or asserts not-None, truthy, non-empty, "did not throw"; a snapshot nobody reads |
+| T2 | Echo | A change in wiring, not in behavior | Expected value computed by the code under test or by the same formula; a mock returning what the test told it to; `was called` with no check of the payload; assertions on private call order |
+| T3 | Example | One wrong result for one input | Calls the code as its users do and asserts the literal result or effect the user would see |
+| T4 | Property | Wrong results across an input space | Round trip (decode(encode(x)) == x), an invariant over generated inputs, a relation between related inputs, agreement with an independent implementation, an injected error handled as specified |
+| T5 | Proven | A seeded fault | Any test above, shown to fail when the code is broken: it fails on the original code before the fix, or it fails when the function is stubbed or a mutant is applied |
+
+Credit a test at its level only once it is proven (T5): run it against the broken version. The cheapest proof is to replace the function's body with a constant and watch the suite fail; the next is a seeded fault at the line the test claims to cover. A test that has never been seen failing is T1 until shown otherwise. Mutants are a fair stand-in for real faults: 73% of real faults in one study and 70% of high-priority bugs in another were coupled to a mutant that a test could have killed.
+
+A test must never be:
+
+1. **A mirror**: expected values computed with the same logic as the code, or by calling the code. Both sides share the bug.
+2. **An echo**: assertions on what a stub was told to return, or that a mock was called, with the payload unchecked.
+3. **A change detector**: assertions on the sequence of internal calls or on private structure. It fails on every refactor and passes on every wrong result.
+4. **Empty**: no assertion, or an assertion any non-empty result satisfies.
+5. **Logic**: loops, branches, or string-building that compute the expectation. The test can have its own bugs and skip its own branches.
+6. **Flaky**: a test that fails without a code change is a warning people learn to ignore, not a control. Fixed sleeps and order dependence are the usual causes; wait on a condition instead.
+7. **Skipped without a reason**: a switched-off control that will not come back.
+8. **Approved blind**: a snapshot updated without reading the diff enshrines the bug.
+
+How to write one that counts:
+
+1. Call the code the way its users do, with one concrete input, and assert the literal output or effect: the exact value, the row written, the message sent, the file removed.
+2. Take the expected value from the specification, the issue, or the incident, never from running the code. A test written by reading the implementation agrees with the implementation, right or wrong.
+3. Use the real dependency where it is fast and deterministic, a fake next, a stub last. Verify an interaction only for a side effect with no other observable result, and then assert the payload it received.
+4. Test error paths on purpose. Most catastrophic failures in distributed systems came from mishandled errors the code had explicitly signalled, and a third of those handlers were empty, over-broad, or marked TODO. Inject the error and assert the handler's effect.
+5. Prefer a property where one exists: a round trip, an invariant, a relation, or an independent implementation to compare against. Generated inputs find the cases nobody wrote down.
+6. Keep tests small, hermetic, and deterministic. Flakiness rises with test size and with shared state.
+7. Turn every incident into a test that reproduces it; most production failures can be reproduced in a unit test.
+8. Prove it: see the test fail on the broken code before trusting it.
+
+In review: run `check_test_strength.py` on the modules of the traced critical flow and treat every unprotected function as T0 for that flow; use the scanner's `test-*` findings as leads to T1 and T2 tests; read the tests that guard the irreversible step and rate them. A flow whose only protection is a T1 or T2 suite has no test control, whatever the suite's size.
+
+When an agent wrote the tests: expect the expected values to have been copied from a run of the code. Ask for the source of each expected value, require the fail-before/pass-after proof for every test that accompanies a fix, and look for tests that assert against mocks of the unit under test. Keeping only the tests that pass converts bug-revealing tests into bug-validating ones.
 
 ## Domain Playbooks
 
@@ -213,7 +254,7 @@ Incident-learning checks:
 
 ### Testing And Safe Stress
 
-Look beyond happy-path unit tests. Valuable stressors include property tests, mutation tests, load tests, fault injection, dependency failure tests, replay tests, migration dry-runs, restore drills, and game days. The key is bounded downside plus learning.
+Look beyond happy-path unit tests. Valuable stressors include property tests, mutation tests, load tests, fault injection, dependency failure tests, replay tests, migration dry-runs, restore drills, and game days. The key is bounded downside plus learning. Rate the existing tests with the scale in Tests As Controls before counting them as protection.
 
 ### Security And Abuse Resistance
 
