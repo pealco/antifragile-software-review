@@ -143,6 +143,15 @@ Protect the invariant, not the instance. State the rule a control enforces in te
 
 An unanswered side effect is unknown, not failed. When an external action can succeed without a reply, a timeout after the request left means the outcome is unknown. Choose an alternative path before the first attempt and record it with the claim; never switch paths after an attempt until the outcome is known. A sequence that makes the switch impossible (Shingo's motion-step device) outranks any classification of error types, because classification is the step actors and agents get wrong.
 
+Build that sequence as structure, not as a rule in a comment. The next person or agent to change the flow sees the code and the tests, not the review. In implementation mode, an external side effect that can succeed without a reply gets all four parts:
+
+1. **Gateway.** One module or function makes every call to the side effect. It alone reads the credentials and builds the client, and it chooses the destination from a closed set. Callers pass the claim, never a destination or a client. Any other code that calls the side effect is a bypass; make a bypass visible by keeping the credentials out of reach of other modules and by a test that fails when another module reads them or imports the client.
+2. **Claim state machine.** Record the claim in shared, durable state (a row under a unique key, not process memory) with its destination and status: `claimed(X)` -> `attempted(X)` -> `confirmed`, `rejected`, or `unknown`. Write `attempted(X)` before the request leaves. Allow a change of destination only from `claimed` (nothing sent) or `rejected` (the destination said no). Leave `unknown` only by reconciliation: ask destination X about this claim, or an operator records the result. Guard each transition in the store itself (for example an update that names the expected status and destination and checks that one row changed), so two processes cannot both move the claim.
+3. **Challenge tests.** (a) Attempt at X with no reply, then request the side effect at Y: assert the gateway refuses and Y receives nothing. (b) Repeat the request at X after no reply: assert at most one effect. (c) Assert that no module outside the gateway reads the credentials. Keep a known-good case: a claim with no attempt can still go to Y.
+4. **Report.** State the invariant (at most one effect per claim, across every destination) and the control strength for each path: calls through the gateway, a new destination added to the gateway, and a direct call that bypasses it. The refusal message names the constraint, the reason, and the sanctioned exit (reconciliation), so an agent that hits it stops and asks instead of working around it.
+
+A gateway without the state machine still lets a later change switch destinations after an attempt; a state machine without the gateway protects only the callers that use it. Rate each part per path, and credit neither without its challenge test.
+
 Audit every control the review relies on:
 
 1. A challenge test exists and runs automatically.
