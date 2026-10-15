@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Check that every file cited on an `Evidence:` line of a review exists in the repository.
 
-Usage: check_review_evidence.py REVIEW.md|- [--root REPO]   (- reads the review from stdin)
+Usage: check_review_evidence.py REVIEW.md|- [--root REPO] [--any-line]   (- reads the review from stdin)
+
+With --any-line, backticked cites on every line are checked, not only on `Evidence:` lines. The
+evals use it so that a review in any format gets credit for accurate cites.
 
 Cites look like `path/file.ext`, `path/file.ext:123`, `path/file.ext:123-130`, or `path/file.ext:5,7-10`. A cite fails
 if the file is missing, resolves outside the repository, or the line is past the end of the file.
@@ -36,10 +39,10 @@ SOURCE_EXTENSIONS = {
 }  # fmt: skip
 
 
-def cites(review: str) -> list[tuple[str, int | None, bool]]:
+def cites(review: str, any_line: bool = False) -> list[tuple[str, int | None, bool]]:
     found = []
     for line in review.splitlines():
-        if not EVIDENCE_LINE.search(line):
+        if not any_line and not EVIDENCE_LINE.search(line):
             continue
         for token in BACKTICKED.findall(line):
             match = CITE.match(token)
@@ -86,6 +89,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("review", help="review markdown file, or - for stdin")
     parser.add_argument("--root", type=Path, default=Path.cwd(), help="repository root")
+    parser.add_argument(
+        "--any-line",
+        action="store_true",
+        help="check cites on every line, not only Evidence: lines",
+    )
     args = parser.parse_args()
 
     root = args.root.resolve()
@@ -94,9 +102,10 @@ def main() -> int:
         if args.review == "-"
         else Path(args.review).read_text(encoding="utf-8")
     )
-    found = cites(text)
+    found = cites(text, any_line=args.any_line)
     if not found:
-        sys.stdout.write("error: no `Evidence:` cites with file paths found\n")
+        where = "" if args.any_line else " on `Evidence:` lines"
+        sys.stdout.write(f"error: no cites with file paths found{where}\n")
         return 1
     failures = 0
     for path, line, absence_claim in found:

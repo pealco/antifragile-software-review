@@ -131,7 +131,16 @@ def run_agent(
         return {"error": "timeout", "final_text": "", "tools": [], "cost": 0.0}
     result = next((e for e in events if e.get("type") == "result"), None)
     if result is None or result.get("terminal_reason") == "api_error":
-        return {"error": "api", "final_text": "", "tools": [], "cost": 0.0}
+        reason = (result or {}).get(
+            "result"
+        ) or "no result event (see stderr of claude -p)"
+        return {
+            "error": "api",
+            "reason": str(reason)[:300],
+            "final_text": "",
+            "tools": [],
+            "cost": 0.0,
+        }
     tools_used, commands = [], []
     for e in events:
         if e.get("type") == "assistant":
@@ -182,7 +191,7 @@ def run_check(name: str, project: Path, run: dict) -> bool:
         )  # untracked, so write it after changed_files is read
         review.write_text(run["final_text"], encoding="utf-8")
         try:
-            done = subprocess.run([sys.executable, str(EVIDENCE_CHECKER), str(review), "--root", str(project)],
+            done = subprocess.run([sys.executable, str(EVIDENCE_CHECKER), str(review), "--root", str(project), "--any-line"],
                                   capture_output=True, text=True, check=False)  # fmt: skip
         finally:
             review.unlink()
@@ -407,9 +416,19 @@ def main() -> int:
     (out / "benchmark.json").write_text(
         json.dumps(summary, indent=2) + "\n", encoding="utf-8"
     )
+    failed = [r for r in results if r["error"]]
+    for r in failed[
+        :3
+    ]:  # an expired login or a bad model name looks the same in every run
+        print(
+            f"error: {r['eval']} {r['config']} run {r['run']}: {r['error']}: {r.get('reason', '')}"
+        )
     print(
         f"\ntotal spend: ${sum(r['cost'] for r in results):.2f}; results in {out.relative_to(ROOT)}"
     )
+    if failed and len(failed) == len(results):
+        print("error: every run failed; nothing was measured")
+        return 1
     return 0
 
 

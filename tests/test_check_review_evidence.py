@@ -93,6 +93,31 @@ class ReviewEvidenceTest(unittest.TestCase):
             )
         self.assertEqual(0, result.returncode, result.stdout)
 
+    def test_any_line_checks_cites_outside_evidence_lines(self) -> None:
+        import sys
+        import tempfile
+
+        checker = (
+            Path(__file__).resolve().parents[1] / "scripts" / "check_review_evidence.py"
+        )
+        review = (
+            "The retry lives in `app/billing.py:2` and the gap in `app/missing.py`.\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "app").mkdir()
+            (Path(tmp) / "app" / "billing.py").write_text(
+                "x = 1\ny = 2\n", encoding="utf-8"
+            )
+            plain = subprocess.run([sys.executable, str(checker), "-", "--root", tmp],
+                                   input=review, capture_output=True, text=True, check=False)  # fmt: skip
+            any_line = subprocess.run([sys.executable, str(checker), "-", "--root", tmp, "--any-line"],
+                                      input=review, capture_output=True, text=True, check=False)  # fmt: skip
+        self.assertEqual(1, plain.returncode)
+        self.assertIn("no cites", plain.stdout)
+        self.assertEqual(1, any_line.returncode)
+        self.assertIn("FAIL app/missing.py", any_line.stdout)
+        self.assertIn("1/2 evidence cites resolve", any_line.stdout)
+
     def test_review_without_cites_fails(self) -> None:
         result = check("No findings.", {"app/a.py": "x\n"})
         self.assertEqual(1, result.returncode)
