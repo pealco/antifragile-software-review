@@ -1,0 +1,5 @@
+# Project settings. runstash looks for this file in the current directory and its parents.
+bucket = "lab-run-archive"
+prefix = "experiments/ranking"
+runs_dir = "runs"
+region = "us-east-2"

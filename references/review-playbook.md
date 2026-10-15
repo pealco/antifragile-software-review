@@ -141,7 +141,7 @@ If an agent or other automation can trigger the action repeatedly, raise the req
 
 Protect the invariant, not the instance. State the rule a control enforces in terms of the harm (at most one charge per order; no deletion without a retention period), and put the control where every path to that harm must pass, usually shared state: a unique claim recorded before the side effect, a constraint, or one gateway that owns the side effect. Rate a control per path. A control on the path where the bug was found is C4 or C5 for that path and C0 for every other path, including paths a later change adds.
 
-An unanswered side effect is unknown, not failed. When an external action can succeed without a reply, a timeout after the request left means the outcome is unknown. Choose an alternative path before the first attempt and record it with the claim; never switch paths after an attempt until the outcome is known. A sequence that makes the switch impossible (Shingo's motion-step device) outranks any classification of error types, because classification is the step actors and agents get wrong.
+A request that got no reply has an unknown outcome, not a failed one. Code that treats a timeout as a failure and resends, or sends elsewhere, can do the action twice.
 
 Audit every control the review relies on:
 

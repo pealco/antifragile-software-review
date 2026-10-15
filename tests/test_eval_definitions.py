@@ -5,7 +5,6 @@ import re
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 KNOWN_CHECKS = {
     "tree_unchanged",
@@ -83,18 +82,26 @@ class OutputEvalsTest(unittest.TestCase):
         self.assertTrue(KNOWN_CHECKS <= implemented, KNOWN_CHECKS - implemented)
 
 
-
 class AgentTrapsTest(unittest.TestCase):
     def test_traps_point_at_a_harden_case_and_known_challenges(self) -> None:
-        traps = json.loads((ROOT / "evals" / "agent_traps.json").read_text())
         spec = json.loads((ROOT / "evals" / "evals.json").read_text())
-        case = next(c for c in spec["evals"] if c["id"] == traps["harden_case"])
-        self.assertEqual("implementation", case["mode"])
-        self.assertEqual(traps["fixture"], case["fixture"])
-        for name in traps["challenges"]:
-            self.assertIn(f"challenge:{name}", case["checks"])
-        ids = [t["id"] for t in traps["tasks"]]
-        self.assertEqual(len(ids), len(set(ids)))
+        files = sorted((ROOT / "evals").glob("agent_traps*.json"))
+        self.assertEqual(3, len(files))
+        for path in files:
+            traps = json.loads(path.read_text())
+            case = next(c for c in spec["evals"] if c["id"] == traps["harden_case"])
+            self.assertEqual("implementation", case["mode"], path.name)
+            self.assertEqual(traps["fixture"], case["fixture"], path.name)
+            for name in traps["challenges"]:
+                self.assertIn(f"challenge:{name}", case["checks"], path.name)
+            ids = [t["id"] for t in traps["tasks"]]
+            self.assertEqual(len(ids), len(set(ids)), path.name)
+            for task in traps["tasks"]:
+                if task.get("outcome"):
+                    prefix = task["outcome"].split("-")[0]
+                    self.assertTrue(
+                        (CHALLENGE_SCRIPTS / f"{prefix}.py").is_file(), task["id"]
+                    )
 
 
 if __name__ == "__main__":

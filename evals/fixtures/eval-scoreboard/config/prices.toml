@@ -1,0 +1,17 @@
+# USD per million tokens. Update when a provider changes list prices.
+
+[models."atlas-mini"]
+input = 0.40
+output = 1.60
+
+[models."atlas-large"]
+input = 2.50
+output = 10.00
+
+[models."corvid-7"]
+input = 3.00
+output = 15.00
+
+[models."corvid-7-mini"]
+input = 0.80
+output = 4.00

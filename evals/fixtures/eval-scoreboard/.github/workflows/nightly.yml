@@ -1,0 +1,22 @@
+name: nightly-eval
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch: {}
+jobs:
+  eval:
+    runs-on: [self-hosted, eval-runner]
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - name: scoreboard run
+        run: uv run python -m scoreboard run --tasks tasks/nightly.jsonl --job-dir jobs/${{ github.run_id }} --post
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          SCOREBOARD_WEBHOOK_URL: ${{ secrets.SCOREBOARD_WEBHOOK_URL }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: summary
+          path: jobs/${{ github.run_id }}/summary.json

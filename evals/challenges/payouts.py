@@ -82,7 +82,12 @@ def schema_to_sqlite(sql: str) -> str:
         flags=re.IGNORECASE,
     )
     sql = re.sub(r"\b(big)?serial\b", "INTEGER", sql, flags=re.IGNORECASE)
-    sql = re.sub(r"\bNOT\s+NULL\b", "", sql, flags=re.IGNORECASE)
+    sql = re.sub(  # keep "IS NOT NULL" in CHECK expressions
+        r"(\bIS\s+)?\bNOT\s+NULL\b",
+        lambda m: m.group(0) if m.group(1) else "",
+        sql,
+        flags=re.IGNORECASE,
+    )
     sql = re.sub(
         r"\bDEFAULT\s+now\(\)", "DEFAULT CURRENT_TIMESTAMP", sql, flags=re.IGNORECASE
     )
@@ -159,6 +164,25 @@ def migration_statements(statement: str) -> list[str]:
     return out
 
 
+def expand_any(sql: str, params):
+    """`x = ANY(%s)` with a list parameter -> `x IN (?, ?, ...)`; SQLite cannot bind a list."""
+    if not isinstance(params, (list, tuple)) or "ANY" not in sql.upper():
+        return sql, params
+    values = iter(params)
+    flat: list = []
+
+    def one(m: re.Match) -> str:
+        value = next(values)
+        if m.group(1) and isinstance(value, (list, tuple)):
+            flat.extend(value)
+            return f"IN ({', '.join(['%s'] * len(value)) or 'NULL'})"
+        flat.append(value)
+        return m.group(0)
+
+    sql = re.sub(r"(=\s*ANY\s*\(\s*)?%s(?(1)\s*\))", one, sql, flags=re.IGNORECASE)
+    return sql, type(params)(flat)
+
+
 def adapt(value):
     import datetime as dt
 
@@ -179,6 +203,7 @@ class Cursor:
         self.description = None
 
     def execute(self, sql, params=None):
+        sql, params = expand_any(sql, params)
         try:
             cur = self.conn.db.execute(
                 to_sqlite(sql), adapt(params) if params is not None else ()
@@ -238,6 +263,12 @@ class Transaction:
         return False
 
 
+def pg_array_append(array: str | None, value) -> str:
+    """Postgres text arrays are stored as their literal, '{a,b}'."""
+    items = (array or "{}").strip("{}")
+    return "{" + (f"{items},{value}" if items else str(value)) + "}"
+
+
 class Conn:
     """psycopg-style connection on one shared SQLite file: work commits when the `with` block
     exits cleanly and rolls back on an exception, as psycopg does."""
@@ -253,6 +284,7 @@ class Conn:
             self.db.create_function(fn, -1, lambda *a: None)
         self.db.create_function("pg_try_advisory_lock", -1, lambda *a: 1)
         self.db.create_function("pg_try_advisory_xact_lock", -1, lambda *a: 1)
+        self.db.create_function("array_append", 2, pg_array_append)
         self.in_tx = False
         self.depth = 0
         self.autocommit = False
@@ -348,7 +380,13 @@ class Bank:
         self.calls += 1
         host = url.split("//", 1)[-1].split("/", 1)[0]
         if self.down and self.down in host:
-            raise sys.modules["requests"].ConnectionError("connection refused")
+            refused = sys.modules[
+                "urllib3.exceptions"
+            ]  # wrapped as real requests wraps it
+            reason = refused.NewConnectionError(None, "connection refused")
+            raise sys.modules["requests"].ConnectionError(
+                refused.MaxRetryError(None, url, reason)
+            )
         self.primary = self.primary or host
         key = (host, (headers or {}).get("Idempotency-Key") or f"no-key-{self.calls}")
         if key not in self.by_key:
@@ -423,9 +461,31 @@ def install_stubs(bank: Bank) -> None:
         def mount(self, *a, **k):
             pass
 
+    class MaxRetryError(Exception):
+        def __init__(self, pool=None, url=None, reason=None):
+            super().__init__(
+                f"Max retries exceeded with url: {url} (Caused by {reason!r})"
+            )
+            self.pool, self.url, self.reason = pool, url, reason
+
+    u3_base = type("HTTPError", (Exception,), {})
+    u3_errors = {
+        "HTTPError": u3_base,
+        "MaxRetryError": type("MaxRetryError", (MaxRetryError, u3_base), {}),
+        "NewConnectionError": type("NewConnectionError", (u3_base,), {}),
+        "NameResolutionError": type("NameResolutionError", (u3_base,), {}),
+        "ConnectTimeoutError": type("ConnectTimeoutError", (u3_base,), {}),
+        "ReadTimeoutError": type("ReadTimeoutError", (u3_base,), {}),
+        "ProtocolError": type("ProtocolError", (u3_base,), {}),
+    }
+    retry = module("urllib3.util.retry", Retry=lambda *a, **k: None)
+    u3_exceptions = module("urllib3.exceptions", **u3_errors)
+    module("urllib3", exceptions=u3_exceptions, util=module("urllib3.util", retry=retry, Retry=retry.Retry),
+           Retry=retry.Retry)  # fmt: skip
+    adapters = module("requests.adapters", HTTPAdapter=lambda *a, **k: None)
     exceptions = module("requests.exceptions", **errors)
     module(
-        "requests", **errors, exceptions=exceptions, Session=Session, post=bank.post, get=bank.get,
+        "requests", **errors, exceptions=exceptions, adapters=adapters, Session=Session, post=bank.post, get=bank.get,
         request=lambda method, *a, **k: getattr(bank, method.lower())(*a, **k),
     )  # fmt: skip
 

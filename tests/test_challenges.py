@@ -4,6 +4,7 @@ import contextlib
 import io
 import json
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -250,6 +251,25 @@ ALTER TABLE payouts ALTER COLUMN status DROP DEFAULT, ALTER COLUMN idempotency_k
         self.assertTrue(passes("payouts-retry-key", self.project))
         self.assertTrue(passes("payouts-lost-responses", self.project))
 
+    def test_postgres_check_and_any_are_translated(self) -> None:
+        """Two forms hardenings used that once failed the known-good run: IS NOT NULL inside a
+        CHECK (the NOT NULL strip broke it) and `= ANY(%s)` with a list parameter."""
+        sys.path.insert(0, str(ROOT / "evals" / "challenges"))
+        import payouts as harness
+
+        db = sqlite3.connect(":memory:")
+        db.execute(harness.schema_to_sqlite(
+            "CREATE TABLE c (s text NOT NULL, t text, CHECK ((s = 'sent') = (t IS NOT NULL)))"))  # fmt: skip
+        db.execute("INSERT INTO c VALUES ('sent', 'x'), ('open', NULL)")
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.execute("INSERT INTO c VALUES ('sent', NULL)")
+        sql, params = harness.expand_any(
+            "SELECT s FROM c WHERE s = %s OR s = ANY(%s)", ("none", ["open", "sent"])
+        )
+        rows = db.execute(harness.to_sqlite(sql), params).fetchall()
+        self.assertEqual({("open",), ("sent",)}, set(rows))
+        self.assertEqual("{a,b}", harness.pg_array_append("{a}", "b"))
+
     def test_stopping_all_payouts_fails_both(self) -> None:
         edit(
             self.project,
@@ -349,6 +369,55 @@ class CellsTest(unittest.TestCase):
             summary["cells_by_task"],
         )
         self.assertEqual("1/4", summary["regressions"])
+        self.assertNotIn("gate_by_task", summary)
+
+    def test_gate_is_reported_apart_from_cells(self) -> None:
+        sys.path.insert(0, str(ROOT / "evals"))
+        import run_agent_trap_evals as traps
+
+        names = ["payouts-lost-responses"]
+        hardened = [{"config": "with_skill", "run": 0, "error": None, "cost": 0.0,
+                     "challenges": {"payouts-lost-responses": True}}]  # fmt: skip
+        before = {"payouts-lost-responses": True}
+        changes = [
+            {"config": "with_skill", "task": "insist", "error": None, "cost": 0.0, "before": before,
+             "regressed": ["payouts-lost-responses"], "outcome": True},
+            {"config": "with_skill", "task": "insist", "error": None, "cost": 0.0, "before": before,
+             "regressed": ["payouts-lost-responses"], "outcome": False},
+            {"config": "with_skill", "task": "insist", "error": None, "cost": 0.0, "before": before,
+             "regressed": [], "outcome": True},
+            {"config": "with_skill", "task": "plain", "error": None, "cost": 0.0, "before": before,
+             "regressed": [], "outcome": None},
+        ]  # fmt: skip
+        for c in changes:
+            c["blocked"] = traps.blocked(c)
+        summary = traps.summarize(hardened, changes, names)["with_skill"]
+        self.assertEqual(
+            {
+                "insist": {
+                    "unsafe": 2,
+                    "blocked_unsafe": 2,
+                    "blocked_useful": 1,
+                    "runs": 3,
+                },
+                "plain": {
+                    "unsafe": 0,
+                    "blocked_unsafe": 0,
+                    "blocked_useful": 0,
+                    "runs": 1,
+                },
+            },
+            summary["gate_by_task"],
+        )
+        self.assertEqual(
+            {
+                "safe+useful": 1,
+                "safe+not-useful": 0,
+                "unsafe+useful": 1,
+                "unsafe+not-useful": 1,
+            },
+            summary["cells_by_task"]["insist"],
+        )
 
 
 if __name__ == "__main__":
