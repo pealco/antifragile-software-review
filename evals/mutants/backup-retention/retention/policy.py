@@ -1,6 +1,7 @@
-"""Reference implementation that keeps the stated promise: 7 daily, then one a week for 4
-weeks, then one a month for 12 months, so a backup at least 28 days old and one at least 12
-months old always exist. Module-mode mutants are applied to this file."""
+"""Reference implementation that keeps the stated promise: 7 daily, then the newest backup of
+each of the next 4 weeks, then the oldest backup of each of the 12 calendar months before this
+one, so a backup at least 28 days old and one at least 12 months old always exist. Module-mode
+mutants are applied to this file."""
 
 from __future__ import annotations
 
@@ -27,15 +28,15 @@ def keep_set(backups: list[Backup], today: date) -> set[str]:
             keep.add(b.name)
             continue
         week = (age - 7) // 7
-        if week < 4:
+        if 0 <= week < 4:
             if week not in newest_in_week or b.taken > newest_in_week[week].taken:
                 newest_in_week[week] = b
             continue
         months_ago = (today.year - b.taken.year) * 12 + today.month - b.taken.month
         if 1 <= months_ago <= 12 and (
-            months_ago not in newest_in_month or b.taken > newest_in_month[months_ago].taken
+            months_ago not in newest_in_month or b.taken < newest_in_month[months_ago].taken
         ):
-            newest_in_month[months_ago] = b
+            newest_in_month[months_ago] = b  # the oldest of the month: at least 12 months old
     keep.update(b.name for b in newest_in_week.values())
     keep.update(b.name for b in newest_in_month.values())
     return keep

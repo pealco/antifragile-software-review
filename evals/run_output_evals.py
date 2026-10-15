@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import statistics
 import subprocess
@@ -206,6 +207,37 @@ def run_check(name: str, project: Path, run: dict) -> bool | None:
             f.startswith("tests/") or Path(f).name.startswith("test_")
             for f in changed_files(project)
         )
+    if (
+        name == "fails_on_original"
+    ):  # the agent's tests, on the untouched fixture, must fail
+        command = run.get("test_command") or DEFAULT_TEST_COMMAND
+        with tempfile.TemporaryDirectory(prefix="fail-before-") as tmp:
+            clean = Path(tmp) / "repo"
+            shutil.copytree(FIXTURES / run["fixture"], clean)
+            shutil.rmtree(clean / "tests", ignore_errors=True)
+            shutil.copytree(project / "tests", clean / "tests")
+            done = subprocess.run(
+                command,
+                shell=True,
+                cwd=clean,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        output = done.stdout + done.stderr
+        detail = run.setdefault("fail_before_detail", {})
+        if done.returncode == 0:
+            detail[name] = (
+                "the new tests pass on the original code: they do not detect the fault"
+            )
+            return False
+        if re.search(r"ImportError|ModuleNotFoundError|AttributeError: module", output):
+            detail[name] = (
+                "the new tests import names the original code lacks; not applicable"
+            )
+            return None
+        detail[name] = "the new tests fail on the original code"
+        return True
     if name.startswith(
         "protected:"
     ):  # a named function must have a test that depends on its logic
@@ -376,7 +408,13 @@ def one_run(job: tuple[dict, bool, int], args: argparse.Namespace, name: str) ->
             return out
         run["fixture"], run["test_command"] = case["fixture"], case.get("test_command")
         out["checks"] = {c: run_check(c, project, run) for c in case["checks"]}
-        for key in ("challenge_detail", "mutant_detail", "protected_detail", "patch"):
+        for key in (
+            "challenge_detail",
+            "mutant_detail",
+            "protected_detail",
+            "fail_before_detail",
+            "patch",
+        ):
             if key in run:
                 out[key] = run[key]
         out["assertions"] = grade_assertions(case, project, run, args.grader_model)
@@ -449,7 +487,7 @@ def report(results: list[dict], cases: list[dict]) -> dict:
                     and not r["error"]
                 ]
                 if kind == "check":
-                    valid = [r for r in rows if r["checks"][item] is not None]
+                    valid = [r for r in rows if r["checks"].get(item) is not None]
                     passed, total = (
                         sum(bool(r["checks"][item]) for r in valid),
                         len(valid),
@@ -476,6 +514,42 @@ def report(results: list[dict], cases: list[dict]) -> dict:
     return summary
 
 
+def regrade_checks(results_dir: Path, cases: dict[str, dict]) -> None:
+    """Recompute the code checks of a saved run from its patches, with no model calls."""
+    results = json.loads((results_dir / "results.json").read_text(encoding="utf-8"))
+    for r in results:
+        case = cases.get(r["eval"])
+        if r.get("error") or not case or "patch" not in r:
+            continue
+        project = Path(tempfile.mkdtemp(prefix="regrade-"))
+        try:
+            shutil.copytree(FIXTURES / case["fixture"], project, dirs_exist_ok=True)
+            git(project, "init", "-q")
+            if r["patch"].strip():
+                subprocess.run(["git", "apply", "--whitespace=nowarn", "-"], input=r["patch"], text=True,
+                               cwd=project, check=True, capture_output=True)  # fmt: skip
+            run = {
+                "fixture": case["fixture"],
+                "test_command": case.get("test_command"),
+                "final_text": r.get("final_text", ""),
+            }
+            r["checks"] = {c: run_check(c, project, run) for c in case["checks"]}
+            for key in (
+                "challenge_detail",
+                "mutant_detail",
+                "protected_detail",
+                "fail_before_detail",
+            ):
+                if key in run:
+                    r[key] = run[key]
+        finally:
+            shutil.rmtree(project, ignore_errors=True)
+    (results_dir / "results.regraded.json").write_text(
+        json.dumps(results, indent=2) + "\n", encoding="utf-8"
+    )
+    report(results, list(cases.values()))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--skill-dir", type=Path, default=ROOT)
@@ -487,6 +561,11 @@ def main() -> int:
     ap.add_argument("--budget", type=float, default=3.0, help="max USD per task run")
     ap.add_argument("--configs", default="with_skill,without_skill")
     ap.add_argument("--label", default="", help="name for the results directory")
+    ap.add_argument(
+        "--regrade-checks",
+        type=Path,
+        help="recompute code checks of a saved run from its patches",
+    )
     args = ap.parse_args()
 
     spec = json.loads(CASES.read_text(encoding="utf-8"))
@@ -500,6 +579,9 @@ def main() -> int:
             if case["mode"] == "audit"
             else []
         )
+    if args.regrade_checks:
+        regrade_checks(args.regrade_checks, {c["id"]: c for c in cases})
+        return 0
     configs = args.configs.split(",")
     jobs = [
         (c, cfg == "with_skill", i)

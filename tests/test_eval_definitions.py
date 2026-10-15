@@ -13,6 +13,7 @@ KNOWN_CHECKS = {
     "evidence_resolves",
     "scanner_run",
     "tests_changed",
+    "fails_on_original",
 }
 CHALLENGE_SCRIPTS = ROOT / "evals" / "challenges"
 

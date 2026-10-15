@@ -16,6 +16,7 @@ FIXTURE = ROOT / "evals" / "fixtures" / "backup-retention"
 MUTANTS = json.loads(
     (ROOT / "evals" / "mutants" / "backup-retention.json").read_text(encoding="utf-8")
 )
+REFERENCE = ROOT / "evals" / "mutants" / "backup-retention"
 
 # Literal expected names for a fixed date: fails on the current code (it keeps 3 weekly backups
 # beyond the daily window, not 4) and on every mutant.
