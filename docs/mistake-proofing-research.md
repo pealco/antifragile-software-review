@@ -254,17 +254,20 @@ The current evals grade review text with a model grader. That measures whether a
 
 The skill is useful if E1 and E2 show a difference with the skill, not only E3.
 
-## 6. Proposed changes to the skill
+## 6. What was changed, and what the measurements show
 
-In order:
+All seven proposed changes were made in October 2026: the vocabulary and chain in the primer; the C0–C5 scale, the challenge-test credit rule and the required-strength table; the control audit and the agent rules in the playbook; challenge tests required in implementation mode; the learning loop; the scanner fix for the two-line `except`/`pass`; and E1 (`challenge:` checks in `run_output_evals.py`) and E2 (`run_agent_trap_evals.py`). Two further fixtures from other domains were added (`eval-scoreboard`, a benchmark CLI whose summary can be wrong while it exits 0; `artifact-prune`, an archive CLI whose prune deletes by name and whose push overwrites the remote).
 
-1. Add the vocabulary (Section 1) and the chain to `references/antifragility-primer.md`, replacing the short poka-yoke section added in this branch.
-2. Replace "Control strength: remove / prevent / detect / mitigate" with the C0–C5 scale, the challenge-test credit rule, and the required-strength table (4.1–4.3).
-3. Add the control audit (4.4) and the agent rules (4.5) to `references/review-playbook.md`.
-4. In implementation mode, require every patch that adds a control to include its challenge test, and to show it failing before and passing after.
-5. Add the learning loop (4.6) to the incident-learning guidance.
-6. Fix the scanner's `silent-exception` rule to match the two-line `except Exception:` / `pass` form. Yuan et al. found empty and log-only handlers behind 25% of catastrophic failures in their sample.
-7. Build E1 into `run_output_evals.py` as a new check type, then E2 as a separate runner.
+Results, all with Claude Opus 5.5 as the reviewer or hardener and Sonnet as the grader and the later agent; "without" means the same model with no skill.
+
+1. **Review quality** (3 runs per configuration, substance assertions passed, with vs without): payouts 27/27 vs 21/27, scoreboard 20/21 vs 17/21, artifacts 18/21 vs 17/21. Sonnet: 25/27 vs 23/27, 19/21 vs 18/21, 17/21 vs 16/21. One planted fault, a push that overwrites a remote archive, was found by no review in any configuration. Cost per review with the skill is 1.6 to 2.9 times the cost without.
+2. **E1, hardening** (3 runs per configuration): every configuration fixed the main faults on all three fixtures, except Opus without the skill on the pause control, 2/3. E1 cannot separate the configurations on these fixtures.
+3. **E2, later agents** (Opus hardens 5 repositories per configuration; a Sonnet agent with no skill then does 4 or 5 tasks on each). Only the task that adds a fallback payment provider ever caused a regression. Across three runs with the skill's invariant guidance in place, a polite request for that fallback produced a double payment in 1/5, 0/5 and 0/5 skill-hardened repositories, against 5/5, 5/5 and 5/5 hardened without the skill. The mechanism, read from the saved patches and the agents' replies: the skill-hardened code named the invariant (a claim recorded before the side effect, a state for an unknown outcome, tests named after the rule), and the later agent read it and declined, asking the user to choose a safer rule.
+4. **E2 under insistence.** When the task said the risk was known and asked for the fallback anyway, the skill-hardened repositories did not hold: 4 of 5 later agents built the unsafe version in two separate runs (one agent in the second run built a safe version that falls back only when the request never left). Without the skill, 5 of 5. A required CI check that runs the challenge test blocked every unsafe build in both configurations and passed the one safe build.
+5. **A structural rule, measured and then removed.** One run added a rule requiring a single gateway that owns the side effect and a claim state machine. All 5 skill hardenings built it (0 of 5 without), and the later agents still put the fallback below it, because the hardeners read "destination" as the beneficiary rather than the provider. The rule was removed afterwards because nothing outside this one fixture supported it; the general invariant rule in `SKILL.md` ("Protect the invariant, not the instance") stays.
+6. **Harness lessons.** Four results that first looked like findings were harness gaps: a missing scenario, an unset credential that silently disabled the code under test, migrations the stub database rejected without reporting it, and a stateless stub database. Each was found by reading the saved patches and the known-good check, and each is now a unit test. Saved patches and `--regrade` made the fixes free to re-measure.
+
+What this supports: the skill's measured value is the structure and the stated invariants it leaves behind, which change what the next agent does for ordinary requests; it is not a substitute for a check outside the agent's write scope, and that check is where safety under insistence came from. Sample sizes are 3 to 5 per cell; differences of one or two runs are within noise. The skill's wording was cleaned after these runs without changing the method.
 
 ## 7. Limits
 

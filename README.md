@@ -29,7 +29,7 @@ It is useful when you want to:
 
 This is different from a linter. Linters are excellent at local correctness, style, security rules, and language-specific best practices. This skill is concerned with system behavior under stress: coupling, recovery, reversibility, observability, deployment safety, dependency optionality, and whether incidents create durable learning. The included scanner is only a discovery aid; it points the agent toward likely review leads and critical-flow candidates, but the final judgment should come from reading the relevant code, config, tests, and operational artifacts in context.
 
-What the evals show, as of October 2026: on the eval fixtures, Claude Opus 5.5 and Sonnet find the planted problems about as often without the skill as with it. The skill's measured value is elsewhere. It gives every review the same structure, with citations a script can check; it rates each control on a strength scale and credits a control only when a test proves it; and when it hardens a repository it states the invariant in the code, which made later coding agents decline an unsafe change in 9 of 10 skill-hardened repositories and 0 of 10 others. The method, its sources, and the measurements are in `docs/mistake-proofing-research.md`.
+What the evals show, as of October 2026: on three fixtures, Claude Opus 5.5 finds the planted problems a little more often with the skill than without (27/27 vs 21/27, 20/21 vs 17/21, 18/21 vs 17/21 substance assertions over 3 runs each), and every configuration fixes the main faults when asked to harden. The skill's larger measured effect is on what it leaves in the code. When it hardens a repository it states the invariant in the code, and a later coding agent asked to make an unsafe change then declined or built it safely in 14 of 15 skill-hardened repositories, against 0 of 15 hardened without the skill, across three runs. When the request insisted on the unsafe change, neither configuration held (1 of 10 skill-hardened repositories stayed safe, 0 of 10 others); a CI check that runs the challenge test blocked every unsafe build. The skill's wording was cleaned after those runs without changing the method. The method, its sources, and the measurements are in `docs/mistake-proofing-research.md`.
 
 ## What It Includes
 
@@ -47,7 +47,7 @@ This repository contains:
 - `evals/`: scanner-and-golden-file checks that run in CI, plus model-in-the-loop evals for triggering and review quality (see Skill Evals).
 - `scripts/check_review_evidence.py`: checks that every file and line a review cites on an `Evidence:` line exists. `SKILL.md` tells the agent to run it before it sends a review.
 - `docs/mistake-proofing-research.md`: the research behind the mistake-proofing method (poka-yoke, safety science, software practice, coding agents), the control strength scale, and how the method is measured.
-- `evals/challenges/`: challenge tests that feed a known-bad case to a repository after an agent changed it and check that the mistake no longer gets through; `evals/run_agent_trap_evals.py` runs later coding agents against hardened repositories and reports whether their changes reopen the mistake.
+- `evals/challenges/`: challenge tests that feed a known-bad case to a repository after an agent changed it and check that the mistake no longer gets through; `evals/run_agent_trap_evals.py` runs later coding agents against hardened repositories, with tasks from `evals/agent_traps*.json`, and reports whether their changes reopen the mistake.
 
 The scanner is deliberately secondary. It helps discover concrete code smells and review leads, but the skill's main value is broader architectural, operational, and design analysis.
 
@@ -207,6 +207,8 @@ The skill distinguishes between audit wording and implementation wording:
 - Audit mode: review, inspect, assess, or tell me what to improve.
 - Implementation mode: make, fix, address, harden, or improve.
 
+In implementation mode, each control the skill adds comes with a challenge test: a test that feeds the known-bad case, fails on the original code, and passes on the patched code, while a known-good case keeps passing.
+
 ### Run The Scanner Directly
 
 The scanner can be run as a standalone Python script. Use it as a discovery tool after you have a rough system map, or as a quick source of review leads when you are exploring unfamiliar code.
@@ -316,6 +318,7 @@ For at least one high-exposure critical flow, trace:
 - failure handling,
 - observability and ownership,
 - rollback or degradation path,
+- the strongest control that stops a mistake at each step (C0 to C5) and whether a test proves it,
 - missing evidence and the cheapest observation that would close the gap.
 
 The practical flow is:
@@ -324,7 +327,7 @@ The practical flow is:
 2. Inspect architecture, deployment paths, persistence, integrations, and feedback loops.
 3. Trace a critical flow and classify its stress response as capped, linear, superlinear, or convex.
 4. Identify where the system has hidden downside, tight coupling, delayed feedback, or irreversible changes.
-5. Score confirmed risks by blast radius, irreversibility, feedback delay, dependency concentration, and ruin potential.
+5. Score confirmed risks by blast radius, irreversibility, feedback delay, dependency concentration, and ruin potential, and rate each control from C0 to C5 against the strength the harm requires.
 6. Look for existing sources of optionality, redundancy, graceful degradation, and rapid learning.
 7. Recommend changes that increase learning and adaptation without adding unnecessary complexity.
 8. Separate quick code-level fixes from larger architectural or operational recommendations.
@@ -343,6 +346,7 @@ The skill favors:
 - bounded downside through reversible changes, dry-runs, explicit skip reasons, and small patches,
 - feedback loops that make scanner failures, skipped files, and capped results visible,
 - antifragile deltas that create learning, optionality, or safe stress rather than durability alone,
+- controls over instructions: a check that stops a mistake outranks a document that asks actors to avoid it, and a control counts only when a test proves it,
 - abstraction only when uncertainty is real, the option is plausible, and the carrying cost is justified.
 
 ## Scanner Details
@@ -441,9 +445,20 @@ The scanner should not try to become a meta-linter. It should surface review lea
 |-- VERSION
 |-- agents/
 |   `-- openai.yaml
+|-- docs/
+|   `-- mistake-proofing-research.md
 |-- evals/
+|   |-- agent_traps.json, agent_traps_artifacts.json, agent_traps_scoreboard.json
+|   |-- challenges/
+|   |-- descriptions/
+|   |-- evals.json
 |   |-- fixtures/
-|   `-- run_evals.py
+|   |-- golden/
+|   |-- run_agent_trap_evals.py
+|   |-- run_evals.py
+|   |-- run_output_evals.py
+|   |-- run_trigger_evals.py
+|   `-- trigger_queries.json
 |-- examples/
 |   `-- scorecard-review.md
 |-- .github/
@@ -455,12 +470,12 @@ The scanner should not try to become a meta-linter. It should surface review lea
 |   |-- review-playbook.md
 |   `-- scanner-rules.md
 |-- scripts/
+|   |-- antifragile_scan.py
 |   |-- check_package_contract.py
-|   `-- antifragile_scan.py
+|   `-- check_review_evidence.py
 |-- templates/
 |   `-- review-scorecard.md
 `-- tests/
-    `-- test_antifragile_scan.py
 ```
 
 ### Development
@@ -498,7 +513,7 @@ python3 scripts/antifragile_scan.py --list-rules > references/scanner-rules.md
 Check Python syntax:
 
 ```bash
-python3 -m py_compile scripts/antifragile_scan.py scripts/check_package_contract.py scripts/check_review_evidence.py tests/test_antifragile_scan.py tests/test_evaluation_scenarios.py tests/test_check_review_evidence.py tests/test_eval_definitions.py evals/run_evals.py evals/run_trigger_evals.py evals/run_output_evals.py
+python3 -m py_compile scripts/*.py tests/*.py evals/*.py evals/challenges/*.py
 ```
 
 The self-scan intentionally skips `scripts/antifragile_scan.py` as `self-scanner` so the scanner's own pattern definitions do not dominate the report.
@@ -523,7 +538,16 @@ python3 evals/run_output_evals.py --runs 3
 python3 evals/run_output_evals.py --configs with_skill --runs 3 --skill-dir /path/to/candidate
 ```
 
-Results go to `evals/results/`, which is not committed. Read a sample of the transcripts before you trust a score. Do not edit an assertion after you see a result unless you rerun both configurations.
+Hardening. Implementation cases in `evals/evals.json` can list `challenge:<name>` checks. A challenge (`evals/challenges/`) runs the fixture's real entrypoint with stubbed services against a known-bad case and checks that the mistake no longer gets through; each also keeps a known-good case passing, so a patch that stops all work does not pass. The unit tests in `tests/test_*challenges.py` prove that each challenge rejects the unfixed fixture and accepts a reference fix.
+
+Later agents. `run_agent_trap_evals.py` hardens a fixture with and without the skill, keeps each hardened repository, then has a plain coding agent do ordinary tasks that invite the same mistake again (`evals/agent_traps*.json`) and reruns the challenges. It reports regressions per task, and for tasks with a utility check it reports four cells (safe or unsafe, useful or not useful) rather than one score. `--gate` also counts what a required CI check running the challenges would have blocked. `--regrade` recomputes everything from saved patches with no model calls, so a challenge can be fixed without paying for the agents again.
+
+```bash
+python3 evals/run_agent_trap_evals.py --hardens 5 --hardener-model claude-opus-5-5 --task-model sonnet --gate
+python3 evals/run_agent_trap_evals.py --regrade evals/results/traps-<label>-<timestamp>
+```
+
+Results go to `evals/results/`, which is not committed. Read a sample of the transcripts before you trust a score. Do not edit an assertion after you see a result unless you rerun both configurations. Keep fixture-specific wording out of the skill: a line stays only if evidence outside the fixtures supports it.
 
 ### Skill And Agent Design
 
@@ -552,7 +576,7 @@ Contributions are welcome. Useful contributions include:
 Before opening a change, run:
 
 ```bash
-python3 -m py_compile scripts/antifragile_scan.py scripts/check_package_contract.py scripts/check_review_evidence.py tests/test_antifragile_scan.py tests/test_evaluation_scenarios.py tests/test_check_review_evidence.py tests/test_eval_definitions.py evals/run_evals.py evals/run_trigger_evals.py evals/run_output_evals.py
+python3 -m py_compile scripts/*.py tests/*.py evals/*.py evals/challenges/*.py
 python3 scripts/check_package_contract.py
 python3 -m unittest discover -s tests
 python3 evals/run_evals.py
