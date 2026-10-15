@@ -288,6 +288,9 @@
       "checks": [
         "python_compiles",
         "tests_changed",
+        "protected:retention/policy.py:keep_set",
+        "protected:retention/policy.py:to_delete",
+        "protected:retention/prune.py:prune",
         "mutant:daily-window",
         "mutant:weekly-newest",
         "mutant:delete-all-guard"

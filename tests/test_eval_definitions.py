@@ -63,6 +63,12 @@ class OutputEvalsTest(unittest.TestCase):
                         ).is_file(),
                         check,
                     )
+                elif check.startswith("protected:"):
+                    file, function = check.removeprefix("protected:").rsplit(":", 1)
+                    source = (
+                        ROOT / "evals" / "fixtures" / case["fixture"] / file
+                    ).read_text()
+                    self.assertIn(f"def {function}(", source, check)
                 elif check.startswith("mutant:"):
                     spec = json.loads(
                         (

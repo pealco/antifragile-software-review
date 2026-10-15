@@ -178,9 +178,7 @@ def main(argv: list[str] | None = None) -> int:
 
     unprotected = [r for r in results if r["unprotected"]]
     if args.format == "json":
-        print(
-            json.dumps({"checked": len(results), "unprotected": unprotected}, indent=2)
-        )
+        print(json.dumps({"checked": results, "unprotected": unprotected}, indent=2))
     else:
         for r in unprotected:
             print(

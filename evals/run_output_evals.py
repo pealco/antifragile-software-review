@@ -33,6 +33,7 @@ GOLDEN = ROOT / "evals" / "golden"
 EVIDENCE_CHECKER = ROOT / "scripts" / "check_review_evidence.py"
 CHALLENGES = ROOT / "evals" / "challenges"
 MUTANTS = ROOT / "evals" / "mutants"
+STRENGTH_CHECKER = ROOT / "scripts" / "check_test_strength.py"
 DEFAULT_TEST_COMMAND = "python3 -m unittest discover -s tests"
 RUN_TIMEOUT_S = 900
 MAX_TURNS = 40
@@ -206,6 +207,37 @@ def run_check(name: str, project: Path, run: dict) -> bool | None:
             for f in changed_files(project)
         )
     if name.startswith(
+        "protected:"
+    ):  # a named function must have a test that depends on its logic
+        file, function = name.removeprefix("protected:").rsplit(":", 1)
+        command = run.get("test_command") or DEFAULT_TEST_COMMAND
+        done = subprocess.run([sys.executable, str(STRENGTH_CHECKER), str(project), "--include", file,
+                               "--tests", command, "--format", "json"], capture_output=True, text=True, check=False)  # fmt: skip
+        detail = run.setdefault("protected_detail", {})
+        if done.returncode == 2 or not done.stdout.strip().startswith("{"):
+            detail[name] = (
+                "suite does not pass unmutated"
+                if done.returncode == 2
+                else done.stderr[-200:]
+            )
+            return False
+        report = json.loads(done.stdout)
+        key = f"{file}::{function}"
+        if key not in {
+            f"{r['file']}::{r['function']}" for r in report.get("checked", [])
+        }:
+            detail[name] = "function no longer exists or is trivial; not applicable"
+            return None
+        unprotected = {
+            f"{r['file']}::{r['function']}": r["stub"] for r in report["unprotected"]
+        }
+        detail[name] = (
+            f"suite passes with the body replaced by return {unprotected[key]}"
+            if key in unprotected
+            else "a test depends on it"
+        )
+        return key not in unprotected
+    if name.startswith(
         "mutant:"
     ):  # the tests the agent left must fail on a seeded fault
         spec = json.loads(
@@ -215,16 +247,51 @@ def run_check(name: str, project: Path, run: dict) -> bool | None:
         target = project / spec["file"]
         original = target.read_text(encoding="utf-8")
         detail = run.setdefault("mutant_detail", {})
-        if original.count(spec["old"]) != 1:
-            detail[name] = "mutation site changed; cannot apply"
-            return None  # not applicable: the agent rewrote the line; excluded from the rates
         passes_clean = (
             subprocess.run(
                 command, shell=True, cwd=project, capture_output=True, check=False
             ).returncode
             == 0
         )
-        target.write_text(original.replace(spec["old"], spec["new"]), encoding="utf-8")
+        if not passes_clean:
+            detail[name] = "suite FAILS unmutated"
+            return False
+        source, mode = original, "line"
+        if original.count(spec["old"]) != 1:
+            # The agent rewrote the seeded line. Fall back to a correct reference implementation of
+            # the file, if the agent's suite accepts it; the fault is then applied to the reference.
+            reference = MUTANTS / run["fixture"] / spec["file"]
+            if not reference.is_file():
+                detail[name] = (
+                    "mutation site changed and no reference file; not applicable"
+                )
+                return None
+            source, mode = reference.read_text(encoding="utf-8"), "module"
+            target.write_text(source, encoding="utf-8")
+            try:
+                accepts_reference = (
+                    subprocess.run(
+                        command,
+                        shell=True,
+                        cwd=project,
+                        capture_output=True,
+                        check=False,
+                    ).returncode
+                    == 0
+                )
+            finally:
+                target.write_text(original, encoding="utf-8")
+            if not accepts_reference:
+                detail[name] = (
+                    "mutation site changed and the suite rejects the reference implementation; not applicable"
+                )
+                return None
+            if source.count(spec["old"]) != 1:
+                detail[name] = (
+                    "mutation site missing from the reference; not applicable"
+                )
+                return None
+        target.write_text(source.replace(spec["old"], spec["new"]), encoding="utf-8")
         try:
             passes_mutated = (
                 subprocess.run(
@@ -235,9 +302,9 @@ def run_check(name: str, project: Path, run: dict) -> bool | None:
         finally:
             target.write_text(original, encoding="utf-8")
         detail[name] = (
-            f"suite {'passes' if passes_clean else 'FAILS'} unmutated, {'passes' if passes_mutated else 'fails'} with the fault"
+            f"{mode} mode: suite {'passes' if passes_mutated else 'fails'} with the fault"
         )
-        return passes_clean and not passes_mutated
+        return not passes_mutated
     if name.startswith(
         "challenge:"
     ):  # a known-bad case the repo must now reject (evals/challenges/)
@@ -256,9 +323,8 @@ def grade_assertions(case: dict, project: Path, run: dict, model: str) -> list[d
     material = run["final_text"]
     if case["mode"] == "implementation":
         git(project, "add", "-A")
-        material += "\n\n--- DIFF OF THE REPOSITORY AFTER THE RUN ---\n" + git(
-            project, "diff", "--cached", "HEAD"
-        )
+        run["patch"] = git(project, "diff", "--cached", "HEAD")
+        material += "\n\n--- DIFF OF THE REPOSITORY AFTER THE RUN ---\n" + run["patch"]
     gold = ""
     if case.get("gold"):
         gold = ("\n\nREFERENCE ANSWER (a good answer for calibration; do not require its wording):\n"
@@ -310,7 +376,7 @@ def one_run(job: tuple[dict, bool, int], args: argparse.Namespace, name: str) ->
             return out
         run["fixture"], run["test_command"] = case["fixture"], case.get("test_command")
         out["checks"] = {c: run_check(c, project, run) for c in case["checks"]}
-        for key in ("challenge_detail", "mutant_detail"):
+        for key in ("challenge_detail", "mutant_detail", "protected_detail", "patch"):
             if key in run:
                 out[key] = run[key]
         out["assertions"] = grade_assertions(case, project, run, args.grader_model)

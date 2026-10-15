@@ -114,5 +114,61 @@ class RetentionMutantsTest(unittest.TestCase):
                 (self.repo / MUTANTS[name]["file"]).write_text(before, encoding="utf-8")
 
 
+class ReferenceTest(unittest.TestCase):
+    """The reference implementation keeps the promise, the weak suite accepts it, every mutant
+    applies to it, and the strong test rejects every mutant applied to it."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.repo = Path(self.tmp.name) / "repo"
+        shutil.copytree(FIXTURE, self.repo)
+        for rel in ("retention/policy.py", "retention/prune.py"):
+            shutil.copy(REFERENCE / rel, self.repo / rel)
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_weak_and_strong_suites_pass_on_the_reference(self) -> None:
+        self.assertTrue(suite_passes(self.repo))
+        (self.repo / "tests" / "test_strong.py").write_text(
+            STRONG_TEST, encoding="utf-8"
+        )
+        self.assertTrue(suite_passes(self.repo))
+
+    def test_reference_keeps_the_promise(self) -> None:
+        sys.path.insert(0, str(self.repo))
+        for mod in list(sys.modules):
+            if mod.startswith("retention"):
+                del sys.modules[mod]
+        from datetime import date, timedelta
+
+        from retention.policy import Backup, keep_set
+
+        today = date(2026, 10, 15)
+        kept = keep_set(
+            [Backup(f"b{d}", today - timedelta(days=d)) for d in range(400)], today
+        )
+        ages = sorted(int(n[1:]) for n in kept)
+        self.assertEqual([0, 1, 2, 3, 4, 5, 6, 7, 14, 21, 28], ages[:11])
+        self.assertGreaterEqual(max(ages), 365)
+        sys.path.remove(str(self.repo))
+
+    def test_every_mutant_applies_to_the_reference_and_strong_test_rejects_it(
+        self,
+    ) -> None:
+        (self.repo / "tests" / "test_strong.py").write_text(
+            STRONG_TEST, encoding="utf-8"
+        )
+        for name in MUTANTS:
+            with self.subTest(mutant=name):
+                before = (self.repo / MUTANTS[name]["file"]).read_text(encoding="utf-8")
+                mutated(self.repo, name)
+                self.assertFalse(
+                    suite_passes(self.repo),
+                    f"the strong test tolerates {name} on the reference",
+                )
+                (self.repo / MUTANTS[name]["file"]).write_text(before, encoding="utf-8")
+
+
 if __name__ == "__main__":
     unittest.main()

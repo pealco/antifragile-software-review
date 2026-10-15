@@ -73,7 +73,9 @@ class TestStrengthTest(unittest.TestCase):
             done = run(repo(tmp))
         self.assertEqual(1, done.returncode, done.stderr)
         report = json.loads(done.stdout)
-        self.assertEqual(3, report["checked"])  # noop is trivial and skipped
+        self.assertEqual(
+            ["tax", "discount", "label"], [r["function"] for r in report["checked"]]
+        )  # noop is trivial
         self.assertEqual(
             ["discount", "label"], [r["function"] for r in report["unprotected"]]
         )
