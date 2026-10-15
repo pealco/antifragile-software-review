@@ -29,6 +29,8 @@ It is useful when you want to:
 
 This is different from a linter. Linters are excellent at local correctness, style, security rules, and language-specific best practices. This skill is concerned with system behavior under stress: coupling, recovery, reversibility, observability, deployment safety, dependency optionality, and whether incidents create durable learning. The included scanner is only a discovery aid; it points the agent toward likely review leads and critical-flow candidates, but the final judgment should come from reading the relevant code, config, tests, and operational artifacts in context.
 
+What the evals show, as of October 2026: on the eval fixtures, Claude Opus 5.5 and Sonnet find the planted problems about as often without the skill as with it. The skill's measured value is elsewhere. It gives every review the same structure, with citations a script can check; it rates each control on a strength scale and credits a control only when a test proves it; and when it hardens a repository it states the invariant in the code, which made later coding agents decline an unsafe change in 9 of 10 skill-hardened repositories and 0 of 10 others. The method, its sources, and the measurements are in `docs/mistake-proofing-research.md`.
+
 ## What It Includes
 
 This repository contains:
@@ -44,6 +46,8 @@ This repository contains:
 - `examples/scorecard-review.md`: a compact example of the review scorecard filled out for a realistic service.
 - `evals/`: scanner-and-golden-file checks that run in CI, plus model-in-the-loop evals for triggering and review quality (see Skill Evals).
 - `scripts/check_review_evidence.py`: checks that every file and line a review cites on an `Evidence:` line exists. `SKILL.md` tells the agent to run it before it sends a review.
+- `docs/mistake-proofing-research.md`: the research behind the mistake-proofing method (poka-yoke, safety science, software practice, coding agents), the control strength scale, and how the method is measured.
+- `evals/challenges/`: challenge tests that feed a known-bad case to a repository after an agent changed it and check that the mistake no longer gets through; `evals/run_agent_trap_evals.py` runs later coding agents against hardened repositories and reports whether their changes reopen the mistake.
 
 The scanner is deliberately secondary. It helps discover concrete code smells and review leads, but the skill's main value is broader architectural, operational, and design analysis.
 
@@ -281,6 +285,8 @@ The scanner helps find concrete evidence, but it should not set the agenda by it
 Every recommendation should say whether it is robust, resilient, or antifragile. Robust systems resist stress. Resilient systems recover from stress. Antifragile systems use bounded stress to learn, gain options, or reduce future downside.
 
 The skill now makes that distinction more concrete by tracing a high-exposure critical flow, classifying the stress response curve, scoring fragility exposure, and naming missing evidence instead of assuming it away.
+
+The review also treats every developer, operator, and coding agent as an actor who will make mistakes. For each step of the traced flow it rates the strongest control that stops a mistake, from documentation (C1) to a design that makes the mistake impossible (C5), credits a control only when a challenge test proves it, and sets the required strength from how reversible the harm is. The scale, the control audit, and the rules for code that coding agents change are in `references/review-playbook.md` under Control Strength.
 
 ### Antifragility Analysis Workflow
 
