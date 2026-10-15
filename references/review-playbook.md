@@ -76,7 +76,7 @@ Assess each important design area with these dimensions:
 | Safe experimentation | Every experiment has production-wide blast radius. | Use feature flags, canaries, shadow traffic, sandboxes, kill switches, and contract tests. |
 | Slack and redundancy | The system runs hot, queues are unbounded, and fallback capacity is unknown. | Preserve headroom, bounded queues, load shedding, graceful degradation, and restore drills. |
 | Incident learning | Incidents create cleanup work but no durable learning. | Turn incidents into tests, dashboards, runbook updates, ownership changes, and safer defaults. |
-| Mistake-proofing | People and coding agents can take the wrong action: two sources of truth, unsafe defaults, optional arguments that must always be set, untested runbook commands, misleading names or docs. | Make the wrong action impossible or fail at the source: one source of truth, safe defaults, required arguments, types and schema constraints, startup checks, executable runbooks. |
+| Mistake-proofing | People and coding agents can take the wrong action: two sources of truth, unsafe defaults, optional arguments that must always be set, procedures nothing has exercised, misleading names or docs. | Make the wrong action impossible or fail at the source: one source of truth, safe defaults, required arguments, types and schema constraints, startup checks, procedures that run as code and are exercised. |
 | Optionality | A design choice locks in one vendor, schema, protocol, runtime, or team bottleneck. | Introduce replaceable boundaries only where uncertainty is real and carrying cost is justified. |
 
 ## Fragility Response Curves
@@ -140,8 +140,6 @@ Required strength:
 If an agent or other automation can trigger the action repeatedly, raise the requirement by one level, up to C5: per-action risk compounds with the number of actions, and written instructions are not reliable controls for agents. Report the gap (required minus effective).
 
 Protect the invariant, not the instance. State the rule a control enforces in terms of the harm (at most one charge per order; no deletion without a retention period), and put the control where every path to that harm must pass, usually shared state: a unique claim recorded before the side effect, a constraint, or one gateway that owns the side effect. Rate a control per path. A control on the path where the bug was found is C4 or C5 for that path and C0 for every other path, including paths a later change adds.
-
-A request that got no reply has an unknown outcome, not a failed one. Code that treats a timeout as a failure and resends, or sends elsewhere, can do the action twice.
 
 Audit every control the review relies on:
 
