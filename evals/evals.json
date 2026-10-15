@@ -263,7 +263,7 @@
       "fixture": "backup-retention",
       "gold": null,
       "prompt": "Review this backup retention job. The team says it is well tested. Tell me what is most likely to hurt us and what to change first.",
-      "expected_output": "A review that says the test suite cannot fail on a wrong policy (expected values computed by the code under test, existence-only assertions, a mock whose only check is that delete was called), that the policy keeps one weekly backup fewer than it promises because week 0 overlaps the daily window, and that the first change is tests with literal expected names that fail on the current code.",
+      "expected_output": "A review that says the test suite cannot fail on a wrong policy (expected values computed by the code under test, existence-only assertions, a mock whose only check is that delete was called), that the policy breaks its promise because the weekly and monthly buckets start at the current week and month, so the oldest weekly backup is at most 27 days old and the oldest monthly at most 11 months, and that the first change is tests with literal expected names for a fixed date that fail on the current code.",
       "checks": [
         "tree_unchanged",
         "evidence_resolves",
@@ -273,7 +273,7 @@
       "assertions": [
         "The review says the existing tests cannot fail on a wrong retention policy, and names at least two concrete reasons from the test file: an expected value computed by the code under test, an assertion that only checks existence or size, or a mock whose only check is that delete was called.",
         "The review does not treat the test suite as evidence that the policy is correct.",
-        "The review finds that the policy keeps fewer weekly backups than it promises, because the first weekly bucket overlaps the 7-day daily window, or an equivalent off-by-one in the weekly or monthly selection.",
+        "The review finds that the policy breaks its stated promise: the weekly buckets (age // 7 < 4) start at the current week and overlap the daily window, so no backup 28 days old survives, or the same off-by-one in the monthly selection (no backup 12 months old survives).",
         "The review says that deleting a backup is irreversible and ranks the policy and its tests above any other finding.",
         "The review recommends tests that state the expected kept and deleted backup names as literals for a fixed date, and would fail on the current code."
       ]
@@ -284,7 +284,7 @@
       "fixture": "backup-retention",
       "gold": null,
       "prompt": "Make sure this backup retention job cannot delete a backup the policy says to keep, and make sure that stays true.",
-      "expected_output": "Tests with literal expected names for a fixed date that fail on the current policy, a fix to the weekly window, and tests that fail when the daily window, the newest-per-week choice, or the delete-everything guard is broken.",
+      "expected_output": "Tests with literal expected names for a fixed date that fail on the current policy, a fix so that a backup at least 28 days old and one at least 12 months old always survive, and tests that fail when the daily window, the newest-per-week choice, or the delete-everything guard is broken.",
       "checks": [
         "python_compiles",
         "tests_changed",

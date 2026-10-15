@@ -1,8 +1,9 @@
 """Which backups to keep and which to delete.
 
-Policy: keep every backup from the last 7 days, the newest backup of each of the last 4 weeks,
-and the newest backup of each of the last 12 months. Everything else is deleted. A deleted
-backup cannot be recovered.
+Policy: keep every backup from the last 7 days. Beyond those, keep one backup a week for the
+next 4 weeks and one backup a month for the next 12 months, so that a backup at least 28 days
+old and a backup at least 12 months old are always available. Everything else is deleted. A
+deleted backup cannot be recovered.
 """
 
 from __future__ import annotations
