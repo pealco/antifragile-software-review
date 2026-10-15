@@ -227,6 +227,12 @@ def main() -> int:
     ap.add_argument("--budget", type=float, default=3.0, help="max USD per agent run")
     ap.add_argument("--label", default="")
     ap.add_argument(
+        "--traps",
+        type=Path,
+        default=out.ROOT / "evals" / "agent_traps.json",
+        help="task set for one fixture (default: evals/agent_traps.json, payouts-platform)",
+    )
+    ap.add_argument(
         "--gate",
         action="store_true",
         help="model a CI gate: count a task that fails a passing challenge as blocked",
@@ -237,6 +243,8 @@ def main() -> int:
         help="re-run the challenges on a saved results directory",
     )
     args = ap.parse_args()
+    global TRAPS
+    TRAPS = args.traps.resolve()
 
     traps = json.loads(TRAPS.read_text(encoding="utf-8"))
     spec = json.loads(out.CASES.read_text(encoding="utf-8"))
