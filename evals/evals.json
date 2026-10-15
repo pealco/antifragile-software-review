@@ -170,6 +170,92 @@
         "The patch adds or changes a test that would fail on the original code for a risk it fixes, for example a test that retried transfers reuse one idempotency key, or that the runbook's pause variable stops the runner.",
         "The final message names the risks it fixed and the higher-risk items that remain."
       ]
+    },
+    {
+      "id": "scoreboard-audit",
+      "mode": "audit",
+      "fixture": "eval-scoreboard",
+      "gold": null,
+      "prompt": "I just joined the evals team, and on Thursday I'm presenting last month's routed-vs-fixed numbers from this scoreboard to leadership. They'll decide whether to make routing the default based on it. Review this repo and tell me what could make those numbers wrong, and what we should fix first.",
+      "expected_output": "A review that finds three ways the summary can be wrong while the run still exits 0: an inherited LLM_BASE_URL overrides the proxy URL so the routed arm is not routed (and zero routed calls is not flagged); trials with no result or a null reward are dropped from the denominator instead of counted as failures; and a model missing from the price catalog is priced at $0. It explains that product decisions are made from these numbers and nothing signals the error, notes that the existing tests use only complete, fully priced jobs, does not raise the atomic summary write or the logged webhook failure as live bugs, and ranks scanner-style noise below these risks.",
+      "checks": [
+        "tree_unchanged",
+        "evidence_resolves",
+        "cites:scoreboard/launch.py",
+        "cites:scoreboard/aggregate.py",
+        "cites:scoreboard/pricing.py"
+      ],
+      "assertions": [
+        "The review explains that the routed arm can run without the proxy: scoreboard/launch.py builds the agent environment as {**written, **os.environ}, so an LLM_BASE_URL exported in the parent environment replaces the proxy URL. The run still exits 0, and a routed arm with routed_calls of 0 is reported like any other arm.",
+        "The review explains that scoreboard/aggregate.py skips trials with a missing result.json or a null reward (continue), so they leave the denominator instead of counting as failures. This contradicts docs/comparing-arms.md, and an arm whose agent crashes more often gets a higher pass rate. The planned trial count in job.json is not used.",
+        "The review explains that scoreboard/pricing.py prices a model that is missing from config/prices.toml at $0 (catalog.get(model, {}) with price.get(..., 0)), and that missing token fields also default to 0, so the arm's cost is understated and no error or warning is produced.",
+        "One of these three silent result errors is ranked as the top risk, and the review says why it is severe: decisions such as making routing the default are made from these numbers, and a wrong summary looks the same as a correct one.",
+        "The review points out that the existing tests cannot fail on these faults: tests/conftest.py builds only complete, fully priced jobs, so no test has a missing or null-reward trial or an unpriced model; and test_routed_arm_points_at_proxy passes only because CI does not export LLM_BASE_URL.",
+        "The review does not claim that summary.json can be left half-written, or that a failed chat post loses the results. If it discusses either, it recognizes that report.write_summary writes atomically (temporary file, then os.replace) and that a failed post is logged after summary.json is written.",
+        "No finding that rests only on the except Exception: pass around mean_duration in scoreboard/aggregate.py, the dev helper scripts/fake_job.py, or the nightly set being small is ranked above the three silent result errors."
+      ]
+    },
+    {
+      "id": "scoreboard-harden",
+      "mode": "implementation",
+      "fixture": "eval-scoreboard",
+      "gold": null,
+      "prompt": "Leadership is about to decide on routing based on this scoreboard. Make sure the numbers it reports can't be quietly wrong, and that they stay that way.",
+      "expected_output": "A patch that counts every planned trial in the denominator, refuses or marks unpriced models instead of pricing them at 0, and keeps the routed arm on the proxy (or refuses to launch) while flagging a run with no routed calls, each with a test that fails on the original code, and a summary of what remains.",
+      "checks": [
+        "python_compiles",
+        "tests_changed",
+        "challenge:scoreboard-denominator",
+        "challenge:scoreboard-unpriced",
+        "challenge:scoreboard-routing-bypass"
+      ],
+      "assertions": [
+        "The patch adds or changes a test that would fail on the original code for a risk it fixes: for example, a job with a missing or null-reward trial that must count as a failure, a model absent from the catalog, or an exported LLM_BASE_URL that must not reach the routed arm.",
+        "The final message names the risks it fixed and the higher-risk items that remain."
+      ]
+    },
+    {
+      "id": "artifacts-audit",
+      "mode": "audit",
+      "fixture": "artifact-prune",
+      "gold": null,
+      "prompt": "The shared GPU box keeps running out of disk and I want to put `runstash prune --force` on a nightly cron so we stop getting paged. Is that safe? Look through the repo and tell me what could go wrong and what we should change first.",
+      "expected_output": "A review that finds that prune deletes any local run whose name exists in the bucket without comparing contents, so trials added after the last push (a resumed run whose re-push was skipped or failed) are deleted with no other copy; that push overwrites the remote archive unconditionally, so an older or different copy with the same name replaces a larger archive; that the dry-run and force tests cannot fail on the faults they name; that does not raise the atomic tarball write or the checksummed upload as a live bug; and that ranks scanner-style noise below the data-loss risks.",
+      "checks": [
+        "tree_unchanged",
+        "evidence_resolves",
+        "cites:runstash/prune.py",
+        "cites:runstash/store.py",
+        "cites:scripts/launch_run.sh"
+      ],
+      "assertions": [
+        "The review explains that prune can delete data that exists nowhere else: runstash/prune.py selects local runs whose name appears in the bucket listing and compares nothing else (no manifest, file list, size, or modification time), so a run that was resumed after its last push and not pushed again is deleted together with its new trials. It names at least one way the re-push is skipped: scripts/launch_run.sh pushes only when the run exits 0, or a failed push prints only a warning.",
+        "This prune data-loss risk is ranked as the top risk, or tied for top, and the review says that a nightly non-interactive prune (--force on a cron) would make the loss automatic and repeated, so it is not safe to schedule as the code stands.",
+        "The review finds that push overwrites the remote archive unconditionally (store.upload writes <prefix>/<run>.tar.gz with no check of what is already there and no versioning or conditional write), so pushing an older or different copy that reuses a run name replaces an archive that holds more trials, and it explains that this combines with prune to lose runs permanently.",
+        "The review points out that the prune tests give false confidence: test_dry_run asserts only on the printed text and never checks that the run directory still exists, test_force_skips_confirmation only runs --help, and no test covers a run that changed after it was pushed.",
+        "The review does not claim that an interrupted push can leave a truncated or corrupt archive under the final name, or that a corrupted upload goes unnoticed. If it discusses this, it recognizes that runstash/archive.py writes to a temporary file and renames it with os.replace after fsync, and that the upload sends a SHA-256 checksum and push compares the uploaded size.",
+        "No finding that rests only on the best-effort except/pass in runstash/progress.py, the dev-only scripts/clean_scratch.py, or the difference between the user config read by prune and the project config read by push is ranked above the prune data-loss risk.",
+        "Among its recommended changes, the review makes prune verify contents before deleting (for example, a manifest of files and sizes written at push time and compared with the local run, or a re-push before delete) and makes push refuse or keep the old archive when the bucket's copy has files the local copy lacks. It proposes a test that would fail on the current code, such as: a run gains a trial after it is pushed, and prune --force must not delete that trial."
+      ]
+    },
+    {
+      "id": "artifacts-harden",
+      "mode": "implementation",
+      "fixture": "artifact-prune",
+      "gold": null,
+      "prompt": "We want to run prune nightly on the shared GPU box. Make runstash safe enough for that: fix whatever could lose experiment data, and make sure it stays fixed.",
+      "expected_output": "A patch that makes prune delete only runs whose local contents match the remote archive, and makes push refuse to replace an archive that holds files the local copy lacks, each with a test that fails on the original code, while identical runs are still pruned and new or superset runs still push. Plus a summary of what remains.",
+      "checks": [
+        "python_compiles",
+        "tests_changed",
+        "challenge:artifacts-prune-stale",
+        "challenge:artifacts-push-overwrite",
+        "challenge:artifacts-dry-run"
+      ],
+      "assertions": [
+        "The patch adds or changes a test that would fail on the original code for a risk it fixes: for example, a run that gains a trial after its push is not deleted by prune --force, or pushing a smaller copy does not replace a larger archive.",
+        "The final message names the risks it fixed and the higher-risk items that remain."
+      ]
     }
   ]
 }

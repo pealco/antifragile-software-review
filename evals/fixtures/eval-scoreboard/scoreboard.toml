@@ -1,0 +1,22 @@
+[proxy]
+url = "http://127.0.0.1:8411/v1"
+policy = "balanced"
+
+[provider]
+url = "https://api.model-provider.example/v1"
+
+[arms.routed]
+via_proxy = true
+model = "auto"
+
+[arms.fixed]
+via_proxy = false
+model = "corvid-7"
+
+[agent]
+command = "agentrunner run"
+timeout_s = 1800
+workers = 4
+
+[report]
+prices = "config/prices.toml"

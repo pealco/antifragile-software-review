@@ -1,0 +1,14 @@
+[project]
+name = "eval-scoreboard"
+version = "0.9.1"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.32",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
