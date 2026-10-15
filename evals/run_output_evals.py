@@ -418,6 +418,8 @@ def one_run(job: tuple[dict, bool, int], args: argparse.Namespace, name: str) ->
             if key in run:
                 out[key] = run[key]
         out["assertions"] = grade_assertions(case, project, run, args.grader_model)
+        if "patch" in run:  # set while grading, so it is copied last
+            out["patch"] = run["patch"]
         return out
     finally:
         shutil.rmtree(project, ignore_errors=True)
