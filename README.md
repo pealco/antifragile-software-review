@@ -455,6 +455,7 @@ The scanner should not try to become a meta-linter. It should surface review lea
 |   |-- evals.json
 |   |-- fixtures/
 |   |-- golden/
+|   |-- mutants/
 |   |-- run_agent_trap_evals.py
 |   |-- run_evals.py
 |   |-- run_output_evals.py
@@ -540,6 +541,8 @@ python3 evals/run_output_evals.py --configs with_skill --runs 3 --skill-dir /pat
 ```
 
 Hardening. Implementation cases in `evals/evals.json` can list `challenge:<name>` checks. A challenge (`evals/challenges/`) runs the fixture's real entrypoint with stubbed services against a known-bad case and checks that the mistake no longer gets through; each also keeps a known-good case passing, so a patch that stops all work does not pass. The unit tests in `tests/test_*challenges.py` prove that each challenge rejects the unfixed fixture and accepts a reference fix.
+
+Test quality. Implementation cases can also grade the tests an agent leaves behind rather than its code. `tests_changed` and `fails_on_original` require new tests that fail on the untouched fixture; `protected:<file>:<function>` runs `scripts/check_test_strength.py` and requires a test that depends on that function; `mutant:<name>` applies a seeded fault from `evals/mutants/<fixture>.json` to the repository as the agent left it and passes only if the suite fails (when the agent rewrote the seeded line, the fault is applied to a reference implementation in `evals/mutants/<fixture>/` instead, if the agent's suite accepts it); `refusals_tested` replaces every `raise` in the code with `pass` and passes only if the suite fails, so a refusal is tested whatever shape the agent gave it. The fixtures `backup-retention` and `doc-sharing` ship with suites that pass on wrong code; `tests/test_*_mutants.py` prove that each weak suite tolerates every seeded fault and that a literal-valued test rejects them. `--regrade-checks` recomputes these checks from saved patches with no model calls.
 
 Later agents. `run_agent_trap_evals.py` hardens a fixture with and without the skill, keeps each hardened repository, then has a plain coding agent do ordinary tasks that invite the same mistake again (`evals/agent_traps*.json`) and reruns the challenges. It reports regressions per task, and for tasks with a utility check it reports four cells (safe or unsafe, useful or not useful) rather than one score. `--gate` also counts what a required CI check running the challenges would have blocked. `--regrade` recomputes everything from saved patches with no model calls, so a challenge can be fixed without paying for the agents again.
 

@@ -1,4 +1,8 @@
-"""Delete the backups the policy no longer keeps."""
+"""Delete the backups the policy no longer keeps.
+
+Promise: the job never deletes every backup. If the policy would delete all of them, the job stops
+and deletes nothing.
+"""
 
 from __future__ import annotations
 

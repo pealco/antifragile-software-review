@@ -289,6 +289,7 @@
         "python_compiles",
         "tests_changed",
         "fails_on_original",
+        "refusals_tested",
         "protected:retention/policy.py:keep_set",
         "protected:retention/prune.py:prune",
         "mutant:daily-window",
@@ -297,6 +298,50 @@
       ],
       "assertions": [
         "The patch replaces or adds tests whose expected values are literals (specific backup names or counts for a fixed date), not values computed by the code under test.",
+        "The final message says what the old tests could not catch and what the new tests catch."
+      ]
+    },
+    {
+      "id": "sharing-audit",
+      "mode": "audit",
+      "fixture": "doc-sharing",
+      "gold": null,
+      "prompt": "Review this document-sharing authorization code. The team says the policy is covered by tests. Tell me what is most likely to hurt us and what to change first.",
+      "expected_output": "A review that says the test suite cannot fail on a wrong policy (expected actions taken from the code's own role table, a result compared with itself, type-only assertions, a skipped suspension test, a caught Forbidden with no assertion), that a suspended owner keeps full access because the owner check runs before the suspension check, that a support account can comment, edit, and share, and that the first change is tests that state each allow or deny decision as a literal from docs/policy.md and fail on the current code.",
+      "checks": [
+        "tree_unchanged",
+        "evidence_resolves",
+        "cites:tests/test_policy.py",
+        "cites:sharing/policy.py"
+      ],
+      "assertions": [
+        "The review says the existing tests cannot fail on a wrong policy, and names at least two concrete reasons from the test file: expected actions taken from the code's own role table, a result compared with itself, an assertion that only checks the type or existence of a result, a skipped test, or a caught exception with no assertion.",
+        "The review does not treat the test suite as evidence that the policy is correct.",
+        "The review finds that a suspended account that owns a document keeps full access, because the owner check runs before the suspension check.",
+        "The review finds that a support account can comment on, edit, or share a document, which the policy forbids.",
+        "The review recommends tests that state the expected allow or deny decision as a literal for each role, action, and account state taken from the policy document, and would fail on the current code."
+      ]
+    },
+    {
+      "id": "sharing-harden",
+      "mode": "implementation",
+      "fixture": "doc-sharing",
+      "gold": null,
+      "prompt": "Make sure this document-sharing service cannot allow an action the policy forbids, and make sure that stays true.",
+      "expected_output": "Tests that state each allow or deny decision as a literal from docs/policy.md and fail on the current code, a fix so that a suspended account can do nothing and a support account can only read, and tests that fail when a viewer gains edit, a share still grants on its until day, or a denied action only logs a warning instead of stopping.",
+      "checks": [
+        "python_compiles",
+        "tests_changed",
+        "fails_on_original",
+        "refusals_tested",
+        "protected:sharing/policy.py:can",
+        "protected:sharing/api.py:perform",
+        "mutant:viewer-edits",
+        "mutant:share-expiry",
+        "mutant:deny-warns"
+      ],
+      "assertions": [
+        "The patch replaces or adds tests whose expected values are literal allow or deny decisions for named roles, actions, and account states, not values computed by the code under test or read from its role table.",
         "The final message says what the old tests could not catch and what the new tests catch."
       ]
     }

@@ -14,6 +14,7 @@ KNOWN_CHECKS = {
     "scanner_run",
     "tests_changed",
     "fails_on_original",
+    "refusals_tested",
 }
 CHALLENGE_SCRIPTS = ROOT / "evals" / "challenges"
 

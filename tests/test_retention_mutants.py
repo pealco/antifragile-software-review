@@ -11,6 +11,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "evals"))
+import run_output_evals as out
+
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "evals" / "fixtures" / "backup-retention"
 MUTANTS = json.loads(
@@ -169,6 +172,30 @@ class ReferenceTest(unittest.TestCase):
                     f"the strong test tolerates {name} on the reference",
                 )
                 (self.repo / MUTANTS[name]["file"]).write_text(before, encoding="utf-8")
+
+
+class RefusalsTestedCheckTest(unittest.TestCase):
+    """`refusals_tested` strips every raise from the code: the weak suite still passes (no test
+    observes a refusal) and the strong test fails."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.repo = Path(self.tmp.name) / "repo"
+        shutil.copytree(FIXTURE, self.repo)
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_weak_suite_fails_the_check_and_strong_test_passes_it(self) -> None:
+        run: dict = {}
+        self.assertFalse(out.run_check("refusals_tested", self.repo, run))
+        (self.repo / "tests" / "test_strong.py").write_text(
+            STRONG_TEST, encoding="utf-8"
+        )
+        for rel in ("retention/policy.py", "retention/prune.py"):
+            shutil.copy(REFERENCE / rel, self.repo / rel)
+        self.assertTrue(out.run_check("refusals_tested", self.repo, run))
+        self.assertTrue(suite_passes(self.repo), "the code is restored after the check")
 
 
 if __name__ == "__main__":

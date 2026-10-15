@@ -1,0 +1,17 @@
+{
+  "viewer-edits": {
+    "file": "sharing/policy.py",
+    "old": "    \"viewer\": frozenset({\"read\"}),",
+    "new": "    \"viewer\": frozenset({\"read\", \"edit\"}),"
+  },
+  "share-expiry": {
+    "file": "sharing/policy.py",
+    "old": "not today < share.until",
+    "new": "not today <= share.until"
+  },
+  "deny-warns": {
+    "file": "sharing/api.py",
+    "old": "        raise Forbidden(f\"{actor.id} may not {action} {doc.id}\")",
+    "new": "        log.warning(\"%s may not %s %s\", actor.id, action, doc.id)"
+  }
+}
