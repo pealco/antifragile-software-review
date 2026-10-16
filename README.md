@@ -93,6 +93,13 @@ Remove it with:
 claude plugin uninstall fragility-review@pealco
 ```
 
+If you installed version 0.2.0 or earlier under the old name `antifragile-software-review`, `claude plugin update` cannot follow the rename. Remove the old name and install the new one:
+
+```bash
+claude plugin uninstall antifragile-software-review@pealco
+claude plugin install fragility-review@pealco --scope user
+```
+
 Try it for one session without installing:
 
 ```bash
