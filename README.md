@@ -1,6 +1,6 @@
 # Hardening Review
 
-[![Tests](https://github.com/pealco/antifragile-software-review/actions/workflows/test.yml/badge.svg)](https://github.com/pealco/antifragile-software-review/actions/workflows/test.yml)
+[![Tests](https://github.com/pealco/hardening-review/actions/workflows/test.yml/badge.svg)](https://github.com/pealco/hardening-review/actions/workflows/test.yml)
 
 A Claude Code plugin, and an Agent Skill for Codex and other clients, for finding where a software system gets hurt by stress or by a mistake, and for fixing the worst of it. It draws on mistake-proofing (poka-yoke), human-error and system-safety research, and antifragility, and it credits only controls that something has proven.
 
@@ -65,20 +65,22 @@ This repository is a Claude Code plugin and its own marketplace. The skill insid
 One step, in a session (Claude Code 2.1.275 or later):
 
 ```text
-/plugin install hardening-review --marketplace pealco/antifragile-software-review
+/plugin install hardening-review --marketplace pealco/hardening-review
 ```
+
+The repository used to be `pealco/antifragile-software-review`; GitHub redirects the old address, so a marketplace added under the old name keeps working.
 
 Or add the marketplace first, pinned to a release, then install:
 
 ```text
-/plugin marketplace add pealco/antifragile-software-review#v0.4.0
+/plugin marketplace add pealco/hardening-review#v0.4.0
 /plugin install hardening-review@pealco
 ```
 
 From a shell:
 
 ```bash
-claude plugin install hardening-review --marketplace pealco/antifragile-software-review --scope user
+claude plugin install hardening-review --marketplace pealco/hardening-review --scope user
 ```
 
 The skill triggers on its own when a request matches its description. Invoke it by hand with `/hardening-review:hardening-review`. Third-party marketplaces do not auto-update, so update with:
@@ -103,7 +105,7 @@ claude plugin install hardening-review@pealco --scope user
 Try it for one session without installing:
 
 ```bash
-git clone https://github.com/pealco/antifragile-software-review.git
+git clone https://github.com/pealco/hardening-review.git
 claude --plugin-dir ./hardening-review
 ```
 
@@ -113,7 +115,7 @@ Without the plugin system, clone the repository into the personal skills directo
 
 ```bash
 mkdir -p ~/.claude/skills
-git clone --branch v0.4.0 https://github.com/pealco/antifragile-software-review.git \
+git clone --branch v0.4.0 https://github.com/pealco/hardening-review.git \
   ~/.claude/skills/hardening-review
 ```
 
@@ -122,7 +124,7 @@ Update it with `git -C ~/.claude/skills/hardening-review pull --ff-only`, switch
 For a project-local install, add the repository as a submodule anywhere in the project and link the skill folder into `.claude/skills`:
 
 ```bash
-git submodule add --branch v0.4.0 https://github.com/pealco/antifragile-software-review.git \
+git submodule add --branch v0.4.0 https://github.com/pealco/hardening-review.git \
   vendor/hardening-review
 mkdir -p .claude/skills
 ln -s ../../vendor/hardening-review/skills/hardening-review \
@@ -138,7 +140,7 @@ Requirements: Codex CLI with local skill support, Git, and Python 3.10 or newer 
 Codex reads `~/.codex/skills/<name>/SKILL.md`, so link the skill folder there:
 
 ```bash
-git clone --branch v0.4.0 https://github.com/pealco/antifragile-software-review.git \
+git clone --branch v0.4.0 https://github.com/pealco/hardening-review.git \
   ~/src/hardening-review
 mkdir -p ~/.codex/skills
 ln -s ~/src/hardening-review/skills/hardening-review \

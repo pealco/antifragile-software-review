@@ -6,8 +6,8 @@
     "name": "Pedro Alcocer",
     "url": "https://github.com/pealco"
   },
-  "homepage": "https://github.com/pealco/antifragile-software-review",
-  "repository": "https://github.com/pealco/antifragile-software-review",
+  "homepage": "https://github.com/pealco/hardening-review",
+  "repository": "https://github.com/pealco/hardening-review",
   "license": "MIT",
   "keywords": [
     "fragility",
