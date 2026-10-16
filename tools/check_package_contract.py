@@ -11,13 +11,13 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL_DIR = ROOT / "skills" / "antifragile-software-review"
+SKILL_DIR = ROOT / "skills" / "fragility-review"
 README = ROOT / "README.md"
 SKILL = SKILL_DIR / "SKILL.md"
 VERSION = ROOT / "VERSION"
 PLUGIN = ROOT / ".claude-plugin" / "plugin.json"
 MARKETPLACE = ROOT / ".claude-plugin" / "marketplace.json"
-SCANNER = SKILL_DIR / "scripts" / "antifragile_scan.py"
+SCANNER = SKILL_DIR / "scripts" / "fragility_scan.py"
 RULES = SKILL_DIR / "references" / "scanner-rules.md"
 WORKFLOW = ROOT / ".github" / "workflows" / "test.yml"
 
@@ -100,8 +100,8 @@ def check_skill_frontmatter_and_references() -> None:
     if missing_fields:
         fail(f"SKILL.md frontmatter missing field(s): {', '.join(missing_fields)}")
 
-    if fields["name"] != "antifragile-software-review":
-        fail("SKILL.md frontmatter name must be antifragile-software-review")
+    if fields["name"] != "fragility-review":
+        fail("SKILL.md frontmatter name must be fragility-review")
 
     # Agent Skills spec limit. Every client reads description, so it must carry the triggers.
     if len(fields["description"]) > 1024:
@@ -155,15 +155,15 @@ def check_generated_rule_catalog() -> None:
     if read_text(RULES) != result.stdout:
         fail(
             "references/scanner-rules.md is stale; regenerate it with "
-            "python3 skills/antifragile-software-review/scripts/antifragile_scan.py --list-rules "
-            "> skills/antifragile-software-review/references/scanner-rules.md"
+            "python3 skills/fragility-review/scripts/fragility_scan.py --list-rules "
+            "> skills/fragility-review/references/scanner-rules.md"
         )
 
 
 def check_claude_skill_dir_scanner_invocation() -> None:
     env = os.environ.copy()
     env["CLAUDE_SKILL_DIR"] = str(SKILL_DIR)
-    command = f'"{sys.executable}" "${{CLAUDE_SKILL_DIR}}/scripts/antifragile_scan.py" "$PWD" --json'
+    command = f'"{sys.executable}" "${{CLAUDE_SKILL_DIR}}/scripts/fragility_scan.py" "$PWD" --json'
     result = subprocess.run(
         ["sh", "-c", command],
         cwd=ROOT,
@@ -181,8 +181,8 @@ def check_plugin_manifests(version: str) -> None:
     """plugin.json and marketplace.json carry the released version and point at the skill."""
     plugin = json.loads(read_text(PLUGIN))
     marketplace = json.loads(read_text(MARKETPLACE))
-    if plugin.get("name") != "antifragile-software-review":
-        fail(f"{PLUGIN} name must be antifragile-software-review")
+    if plugin.get("name") != "fragility-review":
+        fail(f"{PLUGIN} name must be fragility-review")
     if plugin.get("version") != version:
         fail(f"{PLUGIN} version is {plugin.get('version')}; VERSION is {version}")
     entries = [

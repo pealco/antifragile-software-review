@@ -1,13 +1,12 @@
-# Example Antifragility Review Scorecard
+# Example Fragility Review Scorecard
 
 This example shows the intended level of specificity for a small service review. It is illustrative, not evidence for this repository.
 
-## Antifragility Thesis
+## Review Summary
 
 - System shape: API service accepts order requests, writes order state, calls a payment provider, emits fulfillment events, and runs database migrations from CI.
-- Primary stressors: payment latency, partial provider outages, duplicate requests, schema changes, bad deploys, and missing operational feedback.
-- Fragility hypothesis: payment and fulfillment sit on a high-exposure path where timeout gaps and irreversible writes can turn ordinary dependency failures into customer-visible incidents.
-- Antifragile opportunity: add cheap observations, reversible release gates, idempotency checks, and incident-derived tests so small failures improve future behavior.
+- Stressors and actors: payment latency, partial provider outages, duplicate requests, schema changes, bad deploys, and missing operational feedback.
+- Hypothesis: payment and fulfillment sit on a high-exposure path where timeout gaps and irreversible writes can turn ordinary dependency failures into customer-visible incidents.
 - Evidence confidence: medium; code and CI evidence exist, but production metrics, runbooks, and restore drills are not visible.
 
 ## System Map
@@ -30,7 +29,6 @@ This example shows the intended level of specificity for a small service review.
 | Observability and ownership | Request id appears in logs. | Dashboard, SLO, alert recipient, and runbook. | Link the metric to an alert owner and one-page runbook. |
 | Rollback/degradation path | Deploy workflow has a manual rollback command. | Proof rollback was tested after migrations. | Add a rollback drill checklist or CI smoke test against a reversible migration fixture. |
 
-- Stress response curve: superlinear until timeout, idempotency, and rollback evidence exist.
 - Scanner leads that matter: outbound HTTP without timeout, destructive migration without dry-run evidence, unpinned CI action.
 - Scanner leads deferred: local debug prints outside checkout and migration paths.
 
@@ -50,13 +48,12 @@ This example shows the intended level of specificity for a small service review.
 - Evidence quality: direct critical-flow path after code confirmation.
 - Analysis area: dependency / observability / testing.
 - Exposure score: 10/15.
-- Fragility: provider latency can consume request capacity while the system learns only that checkout failed.
+- Harm: provider latency can consume request capacity while the system learns only that checkout failed.
 - Blast radius: checkout requests, customer payment attempts, support load, and order reconciliation.
 - Reversibility: low-risk change if the timeout is introduced behind a named payment client budget and tested with a fake provider.
-- Stress response curve: superlinear now; capped after timeout, cancellation, idempotency, and metrics are verified.
-- Antifragile move: add an explicit timeout budget, propagate cancellation, categorize provider errors, and test timeout behavior against an idempotent retry.
-- Gain mechanism: smaller blast radius, faster learning, and safer experimentation with provider behavior.
-- Robust vs antifragile delta: a timeout alone is robust; timeout metrics plus an incident-derived regression test make future dependency failures improve the system.
+- Invariant: a checkout attempt either completes with a confirmed authorization or fails visibly within the timeout budget; no request waits on the provider without limit.
+- Control strength: today C0, no timeout and errors collapse into one generic failure -> after the change C4, the client enforces the budget and the fake-provider timeout test proves it; required C3 (bounded, reversible harm) raised to C4 because the path moves money.
+- Change: add an explicit timeout budget, propagate cancellation, categorize provider errors, and test timeout behavior against an idempotent retry.
 - Missing evidence: production latency distribution and alert owner.
 - Cheapest observation: record provider timeout counts by endpoint and add one alert-owner note to the runbook.
 - Validation: unit test fake provider timeout, integration test duplicate checkout retry, scanner no longer reports the timeout lead on the payment client.
@@ -64,9 +61,9 @@ This example shows the intended level of specificity for a small service review.
 
 ## Backlog
 
-- Via negativa: remove any checkout-side best-effort swallowing that hides payment provider categories.
+- Remove first: remove any checkout-side best-effort swallowing that hides payment provider categories.
 - Reversibility and optionality: add a feature flag for switching the checkout payment path into authorize-only or degraded mode.
-- Stress-learning experiments: run a fake provider timeout test in CI and a staging fault-injection check before major checkout releases.
+- Safe stress tests: run a fake provider timeout test in CI and a staging fault-injection check before major checkout releases.
 - Observability and ownership: add a checkout SLO, timeout metric, alert owner, and minimal runbook.
 - Structural bets: keep the payment provider behind the existing client boundary until a second provider is plausible enough to justify a deeper adapter.
 - Missing evidence / cheapest observations: verify restore drill dates, migration rollback steps, and production dashboard coverage.

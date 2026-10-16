@@ -1,10 +1,10 @@
 {
-  "skill_name": "antifragile-software-review",
+  "skill_name": "fragility-review",
   "method_assertions": [
     "The review traces one critical flow step by step (trigger, state change, dependencies, failure handling, rollback) before it ranks findings.",
     "The review reports an exposure score out of 15 for its top finding and names all five factors: blast radius, irreversibility, feedback delay, dependency concentration, and ruin potential.",
     "The review states the evidence quality of its top finding separately from its exposure score.",
-    "The review classifies the stress response of the traced flow as capped, linear, superlinear, or convex.",
+    "The review states, for its top finding, the invariant the control protects and the control strength today, after the change, and required, on the C0-C5 scale.",
     "The review lists at least one piece of missing evidence together with the cheapest observation that would close the gap."
   ],
   "evals": [

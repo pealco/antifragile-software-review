@@ -1,19 +1,19 @@
 [
-  {"id": "t01", "split": "train", "should_trigger": true, "query": "Use the antifragile-software-review skill to audit ~/code/payments-service."},
-  {"id": "t02", "split": "train", "should_trigger": true, "query": "Review this repo through an antifragility lens."},
+  {"id": "t01", "split": "train", "should_trigger": true, "query": "Use the fragility-review skill to audit ~/code/payments-service."},
+  {"id": "t02", "split": "train", "should_trigger": true, "query": "The team says the payouts service is well tested. Check whether those tests could actually fail if the code were wrong, and tell me the worst gap."},
   {"id": "t03", "split": "validation", "should_trigger": true, "query": "where is our deploy pipeline merely robust instead of actually getting better from failures? we had 3 rollbacks last quarter and nothing changed afterwards"},
   {"id": "t04", "split": "validation", "should_trigger": true, "query": "can u look at this codebase and tell me whats fragile? like what breaks badly if the billing provider goes down or a migration goes wrong"},
   {"id": "t05", "split": "train", "should_trigger": true, "query": "Harden the highest-risk reversible issue in this repo. I mostly care about the backfill scripts that touch prod data."},
-  {"id": "t06", "split": "train", "should_trigger": true, "query": "Apply Taleb's via negativa and barbell ideas to our service architecture in src/. What should we delete or isolate?"},
+  {"id": "t06", "split": "train", "should_trigger": true, "query": "Idiot-proof our ops scripts. Last week an on-call engineer ran the prod cleanup against the wrong environment. Look at scripts/ and tell me what should be impossible to get wrong."},
   {"id": "t07", "split": "train", "should_trigger": true, "query": "Before the Q1 scale-up I need a prioritised list of fragility risks for our monorepo (web, worker, infra/, migrations/). Trace the most dangerous flow end to end and score the risks."},
   {"id": "t08", "split": "validation", "should_trigger": true, "query": "We keep having the same outage. Look at docs/incidents and the code and tell me whether any of our postmortems actually turned into tests, alerts, or runbook changes."},
-  {"id": "t09", "split": "train", "should_trigger": true, "query": "Should we put an adapter layer in front of our single payment provider? Judge whether it adds real optionality or just coupling, using antifragility principles."},
+  {"id": "t09", "split": "train", "should_trigger": true, "query": "Coding agents keep breaking our billing module in the same ways. Look at the repo and tell me what to change so an agent can't make those mistakes, not just what to write in AGENTS.md."},
   {"id": "t10", "split": "validation", "should_trigger": true, "query": "Make this codebase antifragile."},
   {"id": "n01", "split": "train", "should_trigger": false, "query": "Review this PR for bugs: run `git diff main...HEAD` and tell me what is wrong."},
   {"id": "n02", "split": "validation", "should_trigger": false, "query": "Run a security audit on our Terraform: open security groups, IAM wildcards, that kind of thing."},
   {"id": "n03", "split": "train", "should_trigger": false, "query": "Add retry with exponential backoff and a 10s timeout to the requests call in app/billing.py."},
   {"id": "n04", "split": "train", "should_trigger": false, "query": "Write a blameless postmortem for yesterday's outage. Timeline: 14:02 deploy, 14:09 error spike, 14:20 rollback, 14:31 recovered."},
-  {"id": "n05", "split": "validation", "should_trigger": false, "query": "What's the difference between a circuit breaker and a bulkhead?"},
+  {"id": "n05", "split": "validation", "should_trigger": false, "query": "Explain poka-yoke with three examples from manufacturing for a lean training deck. Nothing about software."},
   {"id": "n06", "split": "train", "should_trigger": false, "query": "Explain the barbell strategy chapter of Taleb's Antifragile for my book club. No software, it's about investing and life."},
   {"id": "n07", "split": "train", "should_trigger": false, "query": "Set up GitHub Actions to run pytest and ruff on every push to main."},
   {"id": "n08", "split": "validation", "should_trigger": false, "query": "why is my deploy failing? the workflow says 'Resource not accessible by integration' on the release step"},
@@ -28,5 +28,7 @@
   {"id": "h07", "split": "holdout", "should_trigger": false, "query": "Add a circuit breaker around the HTTP client in app/client.py using pybreaker."},
   {"id": "h08", "split": "holdout", "should_trigger": false, "query": "Write a rollback runbook for our Kubernetes deployment."},
   {"id": "h09", "split": "holdout", "should_trigger": false, "query": "Our API p99 latency doubled after the last release. Help me find the regression."},
-  {"id": "h10", "split": "holdout", "should_trigger": false, "query": "Refactor this 600-line god class into smaller modules without changing behavior."}
+  {"id": "h10", "split": "holdout", "should_trigger": false, "query": "Refactor this 600-line god class into smaller modules without changing behavior."},
+  {"id": "h11", "split": "holdout", "should_trigger": true, "query": "we're rolling out Claude Code to this repo next month. go through it and tell me where an agent is most likely to do something destructive by accident, and how to make that impossible rather than just warning it"},
+  {"id": "h12", "split": "holdout", "should_trigger": false, "query": "Write a poka-yoke checklist for our warehouse packing line."}
 ]

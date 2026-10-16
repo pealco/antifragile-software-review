@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL_DIR = ROOT / "skills" / "antifragile-software-review"
+SKILL_DIR = ROOT / "skills" / "fragility-review"
 CASES = ROOT / "evals" / "evals.json"
 FIXTURES = ROOT / "evals" / "fixtures"
 GOLDEN = ROOT / "evals" / "golden"
@@ -45,7 +45,7 @@ MAX_GRADER_CHARS = 60_000  # keep the grader prompt well inside its context
 READ_TOOLS = [
     "Skill", "Read", "Glob", "Grep",
     "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(wc:*)", "Bash(grep:*)",
-    "Bash(python3 *antifragile_scan.py*)",
+    "Bash(python3 *fragility_scan.py*)",
     "Bash(python3 *check_review_evidence.py*)",
 ]  # fmt: skip
 # Edits stay inside the temp repo: acceptEdits only auto-approves paths under the working dir.
@@ -119,7 +119,10 @@ def run_agent(
 ) -> dict:
     prompt = case["prompt"]
     if with_skill:  # name the skill so this measures quality, not triggering (see run_trigger_evals.py)
-        prompt = "Use the antifragile-software-review skill. " + prompt
+        installed = sorted(
+            d.name for d in (project / ".claude" / "skills").iterdir() if d.is_dir()
+        )
+        prompt = f"Use the {installed[0]} skill. " + prompt
     tools = READ_TOOLS + (WRITE_TOOLS if case["mode"] == "implementation" else [])
     args = [
         prompt, "--setting-sources", "project", "--no-session-persistence", "--model", model,
@@ -158,7 +161,7 @@ def run_agent(
         "stop": result.get("subtype"),
         "tools": tools_used,
         "skill_invoked": "Skill" in tools_used,
-        "scanner_run": any("antifragile_scan.py" in c for c in commands),
+        "scanner_run": any("fragility_scan.py" in c for c in commands),
         "checker_run": any("check_review_evidence.py" in c for c in commands),
         "cost": result.get("total_cost_usd") or 0.0,
         "turns": result.get("num_turns"),

@@ -1,32 +1,32 @@
-# Antifragility Review Playbook
+# Fragility Review Playbook
 
-This playbook keeps the review focused on architecture, operating model, design decisions, and feedback loops. The scanner is useful evidence, but it is not the review.
+This playbook keeps the review focused on where stress or a mistake can cause harm: architecture, operating model, design decisions, controls, and feedback loops. The scanner is useful evidence, but it is not the review.
 
 ## Contents
 
-- Review Thesis
+- Review Summary
 - System Map
 - Critical Flow Trace
 - Analysis Dimensions
-- Fragility Response Curves
 - Exposure Scoring
+- Control Strength
+- Tests As Controls
 - Domain Playbooks
 - Agent Execution Guidance
 - Missing Evidence
 - Recommendation Rules
 - Evidence Ladder
 
-## Review Thesis
+## Review Summary
 
-Start by writing a short thesis before listing findings:
+Start by writing a short summary before listing findings:
 
 - System shape: what the system appears to do, the main runtime pieces, and the critical user or business flows.
-- Stressors: the volatility the system actually faces, such as dependency failure, load spikes, malformed input, schema change, incidents, cost pressure, traffic shifts, or changing requirements.
-- Fragility hypothesis: where those stressors can create nonlinear harm.
-- Antifragile opportunity: where small failures could be converted into learning, optionality, safer experiments, or smaller future downside.
+- Stressors and actors: the stress the system actually faces (dependency failure, load spikes, malformed input, schema change, incidents, cost pressure, traffic shifts, changing requirements) and the people and coding agents who change and operate it.
+- Hypothesis: where a stressor or a mistake can cause harm that compounds or cannot be undone.
 - Evidence confidence: what is direct code/config evidence, what is docs-only evidence, and what is still unknown.
 
-Keep the thesis falsifiable. A useful thesis names a concrete path, owner, dependency, state boundary, or release mechanism that can be inspected.
+Keep the hypothesis falsifiable. A useful one names a concrete path, owner, dependency, state boundary, or release mechanism that can be inspected.
 
 ## System Map
 
@@ -40,7 +40,7 @@ Build a minimal map before recommending changes:
 | Release path | How are changes staged, verified, rolled back, and observed? What can be canaried or disabled? |
 | Feedback loops | What metrics, logs, traces, SLOs, tests, runbooks, and incident reviews turn stress into learning? |
 | Ownership | Who receives the alert, decides the rollback, owns the runbook, and pays the cost of fragile decisions? |
-| Optionality | Which choices are cheap to change, and which choices lock the system into one vendor, schema, protocol, or deployment path? |
+| Options | Which choices are cheap to change, and which choices lock the system into one vendor, schema, protocol, or deployment path? |
 
 Use scanner results as search leads inside this map. For example, an uncancelled HTTP call matters more if it is on a critical request path with no queue, timeout budget, or degraded mode.
 
@@ -67,7 +67,7 @@ If any step has no evidence, record the gap as missing evidence and recommend th
 
 Assess each important design area with these dimensions:
 
-| Dimension | Fragile pattern | Antifragile move |
+| Dimension | Fragile pattern | Change |
 | --- | --- | --- |
 | Downside concentration | One component, person, region, database, queue, credential, or deploy step can halt the whole system. | Add bulkheads, local failure handling, alternate paths, and explicit ownership. |
 | Reversibility | Changes are hard to undo, replay, or inspect after impact. | Add dry-runs, rollbacks, idempotency, backups, staged migrations, and audit trails. |
@@ -78,19 +78,6 @@ Assess each important design area with these dimensions:
 | Incident learning | Incidents create cleanup work but no durable learning. | Turn incidents into tests, dashboards, runbook updates, ownership changes, and safer defaults. |
 | Mistake-proofing | People and coding agents can take the wrong action: two sources of truth, unsafe defaults, optional arguments that must always be set, procedures nothing has exercised, misleading names or docs. | Make the wrong action impossible or fail at the source: one source of truth, safe defaults, required arguments, types and schema constraints, startup checks, procedures that run as code and are exercised. |
 | Optionality | A design choice locks in one vendor, schema, protocol, runtime, or team bottleneck. | Introduce replaceable boundaries only where uncertainty is real and carrying cost is justified. |
-
-## Fragility Response Curves
-
-For important findings, classify how the system responds as stress increases:
-
-| Curve | Meaning | Common evidence |
-| --- | --- | --- |
-| Capped harm | Loss is bounded and recovery is understood. | Rate limits, bounded queues, rollback, idempotency, graceful degradation, restore tests. |
-| Linear harm | More stress causes proportional pain but no obvious cascade. | Manual cleanup grows with volume, isolated latency increases, recoverable backlog. |
-| Superlinear harm | Small stress can trigger cascading, compounding, or irreversible damage. | Retry storms, unbounded queues, global locks, shared mutable state, destructive scripts, missing rollback. |
-| Convex gain | Bounded stress improves future behavior. | Fault tests create regression coverage, incidents update runbooks and alerts, canaries produce release gates, restore drills harden backups. |
-
-The best antifragility opportunities convert superlinear harm into capped harm first, then into feedback or safe-stress loops that create convex gain.
 
 ## Exposure Scoring
 
@@ -113,6 +100,8 @@ Report evidence quality separately from exposure:
 5. Scanner-only or docs-only lead.
 
 High exposure with weak evidence should become a high-priority observation, not an overconfident finding.
+
+Harm that compounds with stress (retry storms, unbounded queues, global locks, shared mutable state, destructive scripts with no rollback) scores higher on blast radius and ruin potential than harm that grows in proportion to it. Cap the compounding harm first; then add the feedback that turns the next failure into a test, an alert, or a safer default.
 
 ## Control Strength
 
@@ -258,7 +247,7 @@ Look beyond happy-path unit tests. Valuable stressors include property tests, mu
 
 ### Security And Abuse Resistance
 
-Treat security controls as antifragility when they reduce blast radius and generate learning. Look for least privilege, credential rotation, auditability, dependency pinning, policy checks, input validation, rate limiting, and abuse telemetry. Avoid presenting scanner hints as proof of vulnerability.
+Treat security controls as part of this review when they reduce blast radius or generate learning. Look for least privilege, credential rotation, auditability, dependency pinning, policy checks, input validation, rate limiting, and abuse telemetry. Avoid presenting scanner hints as proof of vulnerability.
 
 ### Web And API Services
 
@@ -319,8 +308,7 @@ Examples:
 - Prefer removing fragile mechanisms before adding new machinery.
 - State the control strength (C0-C5) today and after the move, whether a challenge test proves it, and the required strength.
 - Tie every recommendation to a stressor and a blast radius.
-- State whether the move is robust, resilient, or antifragile.
-- State the gain mechanism: faster learning, smaller blast radius, cheaper reversal, safer experimentation, dependency optionality, or incident-to-test conversion.
+- State what the change buys: a stopped mistake, a smaller blast radius, a cheaper reversal, faster detection, or an incident turned into a test.
 - Prefer small reversible patches that create learning loops.
 - Do not overfit to scanner output. A scanner hit outside a critical path may be lower priority than an architectural single point of failure with no regex signal.
 - Separate confirmed findings from open questions.

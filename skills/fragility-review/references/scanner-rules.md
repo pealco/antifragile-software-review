@@ -1,4 +1,4 @@
-# Antifragile Scanner Rules
+# Fragility Scanner Rules
 
 54 rule(s). Empty language lists mean the rule can apply across supported text languages.
 
@@ -11,7 +11,7 @@
 - Exposure dimensions: feedback_delay
 - Linter overlaps: ruff:E722
 - Why it matters: Broad exception handling can erase failure evidence unless it logs, measures, or re-raises nearby.
-- Scanner value: Adds antifragility framing around feedback loss; Ruff provides more precise Python linting.
+- Scanner value: Frames the finding as feedback loss; Ruff provides more precise Python linting.
 
 ## debug-print
 
@@ -33,7 +33,7 @@
 - Exposure dimensions: irreversibility, ruin_potential
 - Linter overlaps: none
 - Why it matters: Destructive actions need dry-runs, rollback plans, backups, approvals, or idempotent recovery.
-- Scanner value: Antifragility review lead; confirm in context before treating it as a finding.
+- Scanner value: Review lead; confirm in context before treating it as a finding.
 
 ## empty-catch
 
@@ -66,7 +66,7 @@
 - Exposure dimensions: irreversibility, ruin_potential
 - Linter overlaps: none
 - Why it matters: Forced actions can remove useful friction around irreversible operations.
-- Scanner value: Antifragility review lead; confirm in context before treating it as a finding.
+- Scanner value: Review lead; confirm in context before treating it as a finding.
 
 ## github-actions-unpinned-action
 
@@ -143,7 +143,7 @@
 - Exposure dimensions: dependency_concentration, blast_radius
 - Linter overlaps: none
 - Why it matters: Hard-coded endpoints can reduce optionality unless isolated behind config or adapters.
-- Scanner value: Antifragility review lead; confirm in context before treating it as a finding.
+- Scanner value: Review lead; confirm in context before treating it as a finding.
 
 ## ignored-error
 
@@ -154,7 +154,7 @@
 - Exposure dimensions: feedback_delay
 - Linter overlaps: none
 - Why it matters: Explicitly ignored failures need an owner, metric, or bounded blast radius.
-- Scanner value: Antifragility review lead; confirm in context before treating it as a finding.
+- Scanner value: Review lead; confirm in context before treating it as a finding.
 
 ## impossible-assumption
 
@@ -165,7 +165,7 @@
 - Exposure dimensions: feedback_delay, dependency_concentration
 - Linter overlaps: none
 - Why it matters: Claims that reality cannot vary are common sources of brittle edge cases.
-- Scanner value: Antifragility review lead; confirm in context before treating it as a finding.
+- Scanner value: Review lead; confirm in context before treating it as a finding.
 
 ## java-kotlin-broad-catch
 
@@ -220,7 +220,7 @@
 - Exposure dimensions: feedback_delay, dependency_concentration
 - Linter overlaps: none
 - Why it matters: Magic timeout constants should be tied to SLOs, budgets, or measured behavior.
-- Scanner value: Antifragility review lead; confirm in context before treating it as a finding.
+- Scanner value: Review lead; confirm in context before treating it as a finding.
 
 ## process-abort
 
@@ -330,7 +330,7 @@
 - Exposure dimensions: dependency_concentration, blast_radius
 - Linter overlaps: none
 - Why it matters: Singleton-style access can hide central dependency and replacement risk.
-- Scanner value: Antifragility review lead; confirm in context before treating it as a finding.
+- Scanner value: Review lead; confirm in context before treating it as a finding.
 
 ## sql-destructive-schema
 
@@ -451,7 +451,7 @@
 - Exposure dimensions: feedback_delay
 - Linter overlaps: none
 - Why it matters: Known debt is often the cheapest place to remove fragility first.
-- Scanner value: Antifragility review lead; confirm in context before treating it as a finding.
+- Scanner value: Review lead; confirm in context before treating it as a finding.
 
 ## typescript-explicit-any
 
@@ -561,7 +561,7 @@
 - Exposure dimensions: blast_radius, dependency_concentration, feedback_delay
 - Linter overlaps: ruff:S113
 - Why it matters: Outbound calls without explicit timeouts can turn dependency latency into thread or worker exhaustion.
-- Scanner value: Keeps timeout risk in the antifragility report beside non-Python cancellation and cascade signals.
+- Scanner value: Keeps timeout risk in the fragility report beside non-Python cancellation and cascade signals.
 
 ## retry-without-backoff
 

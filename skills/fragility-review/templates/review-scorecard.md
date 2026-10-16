@@ -1,11 +1,10 @@
-# Antifragility Review Scorecard
+# Fragility Review Scorecard
 
-## Antifragility Thesis
+## Review Summary
 
 - System shape:
-- Primary stressors:
-- Fragility hypothesis:
-- Antifragile opportunity:
+- Stressors and actors:
+- Hypothesis:
 - Evidence confidence:
 
 ## System Map
@@ -28,7 +27,6 @@
 | Observability and ownership |  |  |  |
 | Rollback/degradation path |  |  |  |
 
-- Stress response curve: capped / linear / superlinear / convex.
 - Scanner leads that matter:
 - Scanner leads deferred:
 
@@ -46,15 +44,12 @@
 - Evidence quality:
 - Analysis area:
 - Exposure score:
-- Fragility:
+- Harm:
 - Blast radius:
 - Reversibility:
-- Stress response curve:
-- Antifragile move:
-- Invariant (the rule the control protects, stated as harm):
-- Control strength (today, after the move, required):
-- Gain mechanism:
-- Robust vs antifragile delta:
+- Change:
+- Invariant: (the rule the control protects, stated as the harm it prevents)
+- Control strength: (today Cn, proven or unproven -> after the change Cm, with its challenge test; required Ck)
 - Missing evidence:
 - Cheapest observation:
 - Validation:
@@ -62,9 +57,9 @@
 
 ## Backlog
 
-- Via negativa:
+- Remove first:
 - Reversibility and optionality:
-- Stress-learning experiments:
+- Safe stress tests:
 - Observability and ownership:
 - Structural bets:
 - Missing evidence / cheapest observations:

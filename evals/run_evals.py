@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run lightweight executable checks for antifragility skill scenarios."""
+"""Run lightweight executable checks for the fragility review skill scenarios."""
 
 from __future__ import annotations
 
@@ -11,19 +11,19 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL_DIR = ROOT / "skills" / "antifragile-software-review"
-SCANNER = SKILL_DIR / "scripts" / "antifragile_scan.py"
+SKILL_DIR = ROOT / "skills" / "fragility-review"
+SCANNER = SKILL_DIR / "scripts" / "fragility_scan.py"
 SCENARIOS = SKILL_DIR / "references" / "evaluation-scenarios.md"
 FIXTURES = ROOT / "evals" / "fixtures"
 GOLDEN = ROOT / "evals" / "golden"
 
 REQUIRED_REVIEW_MARKERS = (
-    "## Antifragility Thesis",
+    "## Review Summary",
     "## System Map",
     "## Critical Flow Trace",
     "Exposure score:",
-    "Stress response curve:",
-    "Gain mechanism:",
+    "Invariant:",
+    "Control strength:",
     "Missing evidence",
     "Cheapest observation",
 )
@@ -65,7 +65,7 @@ EVAL_CASES = (
             "Exposure score: 13/15",
             "data-change-missing-dry-run",
             "data-change-missing-checkpoint",
-            "Gain mechanism: cheaper reversal and incident-to-test conversion.",
+            "Change: add dry-run counts, resumable batches, restore rehearsal notes, and a regression test linked from the incident.",
         ),
     },
     {

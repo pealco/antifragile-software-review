@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Heuristic scanner for antifragile software review leads."""
+"""Heuristic scanner for fragility review leads: places where stress or a mistake can cause harm."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ import re
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-
 
 SKIP_DIRS = {
     ".git",
@@ -107,19 +106,39 @@ CONFIG_FILENAMES = {
     "requirements.txt",
 }
 
-CONFIG_SUFFIXES = {".cfg", ".conf", ".gradle", ".json", ".properties", ".tf", ".tfvars", ".toml", ".yaml", ".yml"}
+CONFIG_SUFFIXES = {
+    ".cfg",
+    ".conf",
+    ".gradle",
+    ".json",
+    ".properties",
+    ".tf",
+    ".tfvars",
+    ".toml",
+    ".yaml",
+    ".yml",
+}
 DOC_SUFFIXES = {".adoc", ".md", ".rst", ".txt"}
 DOC_DIR_NAMES = {"doc", "docs", "reference", "references", "runbook", "runbooks"}
 TEST_DIR_NAMES = {"__tests__", "spec", "test", "tests"}
 
-INLINE_IGNORE_RE = re.compile(r"antifragile-scan:\s*ignore(?:\[([^\]]+)\])?", re.IGNORECASE)
+INLINE_IGNORE_RE = re.compile(
+    r"(?:fragility|antifragile)-scan:\s*ignore(?:\[([^\]]+)\])?", re.IGNORECASE
+)
 SOURCE_KINDS = ("code", "config", "docs", "tests")
 EXPOSURE_BY_CATEGORY = {
     "Silent failure and lost learning": ("feedback_delay",),
     "Prediction and timing dependence": ("feedback_delay", "dependency_concentration"),
-    "Cascade and ruin risk": ("blast_radius", "dependency_concentration", "ruin_potential"),
+    "Cascade and ruin risk": (
+        "blast_radius",
+        "dependency_concentration",
+        "ruin_potential",
+    ),
     "Irreversibility": ("irreversibility", "ruin_potential"),
-    "Centralized state and tight coupling": ("dependency_concentration", "blast_radius"),
+    "Centralized state and tight coupling": (
+        "dependency_concentration",
+        "blast_radius",
+    ),
     "Weak observability": ("feedback_delay",),
     "Known fragility markers": ("feedback_delay",),
 }
@@ -163,8 +182,14 @@ FLOW_FEEDBACK_RE = re.compile(
     r"\b(metric|metrics|trace|tracing|span|slo|alert|dashboard|runbook|postmortem|post-mortem|incident)\b",
     re.IGNORECASE,
 )
-DATA_CHANGE_PATH_RE = re.compile(r"(^|/)(migrations?|backfills?|data[-_]?migrations?|repairs?|scripts?)(/|$)|backfill|migration|repair", re.IGNORECASE)
-DATA_CHANGE_ANCHOR_PATH_RE = re.compile(r"(^|/)(migrations?|backfills?|data[-_]?migrations?|repairs?)(/|$)|backfill|migration|repair", re.IGNORECASE)
+DATA_CHANGE_PATH_RE = re.compile(
+    r"(^|/)(migrations?|backfills?|data[-_]?migrations?|repairs?|scripts?)(/|$)|backfill|migration|repair",
+    re.IGNORECASE,
+)
+DATA_CHANGE_ANCHOR_PATH_RE = re.compile(
+    r"(^|/)(migrations?|backfills?|data[-_]?migrations?|repairs?)(/|$)|backfill|migration|repair",
+    re.IGNORECASE,
+)
 DATA_MUTATION_RE = re.compile(
     r"\b(ALTER\s+TABLE|DROP\s+(TABLE|COLUMN|DATABASE|SCHEMA|INDEX|TYPE|VIEW)|TRUNCATE\s+TABLE|DELETE\s+FROM|UPDATE\s+\S+\s+SET|INSERT\s+INTO|bulk_update|update_all|delete_all|destroy_all|save!)\b",
     re.IGNORECASE,
@@ -174,13 +199,18 @@ FLOW_STATE_RE = re.compile(
     + r"|\b(?:db|database|repo|repository|session|client)\.(?:execute|save|insert|update|delete|commit)\b",
     re.IGNORECASE,
 )
-DATA_DRY_RUN_RE = re.compile(r"\b(dry[-_ ]?run|preview|noop|no-op|plan|--check)\b", re.IGNORECASE)
+DATA_DRY_RUN_RE = re.compile(
+    r"\b(dry[-_ ]?run|preview|noop|no-op|plan|--check)\b", re.IGNORECASE
+)
 DATA_CHECKPOINT_RE = re.compile(
     r"\b(checkpoint|resume|resumable|cursor|batch|limit|page_size|chunk|idempotent|upsert|ON\s+CONFLICT)\b",
     re.IGNORECASE,
 )
 RETRY_RE = re.compile(r"\b(retry|retries|retried|retrying)\b", re.IGNORECASE)
-RETRY_BOUND_RE = re.compile(r"\b(backoff|jitter|budget|deadline|max[-_ ]?retries|max[-_ ]?attempts|retry[-_ ]?budget|exponential|sleep|delay|timeout)\b", re.IGNORECASE)
+RETRY_BOUND_RE = re.compile(
+    r"\b(backoff|jitter|budget|deadline|max[-_ ]?retries|max[-_ ]?attempts|retry[-_ ]?budget|exponential|sleep|delay|timeout)\b",
+    re.IGNORECASE,
+)
 
 LANGUAGE_BY_SUFFIX = {
     ".c": "c",
@@ -243,7 +273,9 @@ class Pattern:
     languages: tuple[str, ...] = ()
     linter_overlaps: tuple[str, ...] = ()
     exposure_dimensions: tuple[str, ...] = ()
-    scanner_value: str = "Antifragility review lead; confirm in context before treating it as a finding."
+    scanner_value: str = (
+        "Review lead; confirm in context before treating it as a finding."
+    )
 
 
 @dataclass
@@ -284,7 +316,7 @@ PATTERNS = [
         "Broad exception handling can erase failure evidence unless it logs, measures, or re-raises nearby.",
         languages=("python",),
         linter_overlaps=("ruff:E722",),
-        scanner_value="Adds antifragility framing around feedback loss; Ruff provides more precise Python linting.",
+        scanner_value="Frames the finding as feedback loss; Ruff provides more precise Python linting.",
     ),
     Pattern(
         "silent-exception",
@@ -660,27 +692,51 @@ PATTERNS = [
 PRESENCE_TERMS = {
     "rollback": re.compile(r"\b(rollback|roll back|revert)\b", re.IGNORECASE),
     "dry-run": re.compile(r"\b(dry[-_ ]?run|preview mode)\b", re.IGNORECASE),
-    "feature-flags": re.compile(r"\b(feature[-_ ]?flag|flipper|launchdarkly|split\.io|kill switch)\b", re.IGNORECASE),
-    "canary": re.compile(r"\b(canary|progressive rollout|staged rollout)\b", re.IGNORECASE),
-    "chaos": re.compile(r"\b(chaos|fault injection|failure injection|game day|toxiproxy|gremlin)\b", re.IGNORECASE),
-    "observability": re.compile(r"\b(opentelemetry|prometheus|metrics|tracing|trace_id|span_id|slo|error budget)\b", re.IGNORECASE),
-    "incident-learning": re.compile(r"\b(postmortem|post-mortem|incident review|runbook|playbook)\b", re.IGNORECASE),
+    "feature-flags": re.compile(
+        r"\b(feature[-_ ]?flag|flipper|launchdarkly|split\.io|kill switch)\b",
+        re.IGNORECASE,
+    ),
+    "canary": re.compile(
+        r"\b(canary|progressive rollout|staged rollout)\b", re.IGNORECASE
+    ),
+    "chaos": re.compile(
+        r"\b(chaos|fault injection|failure injection|game day|toxiproxy|gremlin)\b",
+        re.IGNORECASE,
+    ),
+    "observability": re.compile(
+        r"\b(opentelemetry|prometheus|metrics|tracing|trace_id|span_id|slo|error budget)\b",
+        re.IGNORECASE,
+    ),
+    "incident-learning": re.compile(
+        r"\b(postmortem|post-mortem|incident review|runbook|playbook)\b", re.IGNORECASE
+    ),
 }
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("repo", nargs="?", default=".", help="Repository path to scan")
-    parser.add_argument("--json", action="store_true", help="Emit JSON instead of Markdown")
-    parser.add_argument("--list-rules", action="store_true", help="List scanner rules and exit")
+    parser.add_argument(
+        "--json", action="store_true", help="Emit JSON instead of Markdown"
+    )
+    parser.add_argument(
+        "--list-rules", action="store_true", help="List scanner rules and exit"
+    )
     parser.add_argument(
         "--exclude",
         action="append",
         default=[],
         help="Glob path to skip, relative to repo root. Repeat for multiple excludes.",
     )
-    parser.add_argument("--max-per-pattern", type=int, default=12, help="Maximum findings per pattern")
-    parser.add_argument("--max-file-bytes", type=int, default=1_000_000, help="Skip files larger than this")
+    parser.add_argument(
+        "--max-per-pattern", type=int, default=12, help="Maximum findings per pattern"
+    )
+    parser.add_argument(
+        "--max-file-bytes",
+        type=int,
+        default=1_000_000,
+        help="Skip files larger than this",
+    )
     return parser.parse_args()
 
 
@@ -734,8 +790,12 @@ def classify_path(path: Path) -> str:
     name = path.name
     lower_name = name.lower()
 
-    if parts & TEST_DIR_NAMES or lower_name.startswith("test_") or lower_name.endswith(
-        ("_test.py", ".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx", "_test.go")
+    if (
+        parts & TEST_DIR_NAMES
+        or lower_name.startswith("test_")
+        or lower_name.endswith(
+            ("_test.py", ".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx", "_test.go")
+        )
     ):
         return "tests"
     if suffix in DOC_SUFFIXES or parts & DOC_DIR_NAMES:
@@ -747,7 +807,11 @@ def classify_path(path: Path) -> str:
 
 def language_for_path(path: Path) -> str:
     parts = {part.lower() for part in path.parts}
-    if path.suffix.lower() in {".yaml", ".yml"} and ".github" in parts and "workflows" in parts:
+    if (
+        path.suffix.lower() in {".yaml", ".yml"}
+        and ".github" in parts
+        and "workflows" in parts
+    ):
         return "github-actions"
     if path.name in LANGUAGE_BY_FILENAME:
         return LANGUAGE_BY_FILENAME[path.name]
@@ -779,8 +843,12 @@ def shell_strict_mode_present(text: str) -> bool:
         stripped = line.strip()
         if not stripped.startswith("set "):
             continue
-        has_errexit = has_errexit or bool(re.search(r"(^|\s)-[A-Za-z]*e[A-Za-z]*\b|\berrexit\b", stripped))
-        has_nounset = has_nounset or bool(re.search(r"(^|\s)-[A-Za-z]*u[A-Za-z]*\b|\bnounset\b", stripped))
+        has_errexit = has_errexit or bool(
+            re.search(r"(^|\s)-[A-Za-z]*e[A-Za-z]*\b|\berrexit\b", stripped)
+        )
+        has_nounset = has_nounset or bool(
+            re.search(r"(^|\s)-[A-Za-z]*u[A-Za-z]*\b|\bnounset\b", stripped)
+        )
         has_pipefail = has_pipefail or "pipefail" in stripped
 
     return has_errexit and has_nounset and has_pipefail
@@ -791,7 +859,9 @@ def file_ignore_applies(text: str, pattern_id: str) -> bool:
         match = INLINE_IGNORE_RE.search(line)
         if not match or not match.group(1):
             continue
-        ignored_ids = {item.strip() for item in re.split(r"[,\s]+", match.group(1)) if item.strip()}
+        ignored_ids = {
+            item.strip() for item in re.split(r"[,\s]+", match.group(1)) if item.strip()
+        }
         if pattern_id in ignored_ids:
             return True
     return False
@@ -804,7 +874,9 @@ def ignore_applies(line: str, pattern_id: str) -> bool:
     raw_ids = match.group(1)
     if not raw_ids:
         return True
-    ignored_ids = {item.strip() for item in re.split(r"[,\s]+", raw_ids) if item.strip()}
+    ignored_ids = {
+        item.strip() for item in re.split(r"[,\s]+", raw_ids) if item.strip()
+    }
     return pattern_id in ignored_ids
 
 
@@ -854,7 +926,9 @@ def linter_overlaps_for_pattern(pattern: Pattern, line: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(overlaps))
 
 
-def exposure_dimensions_for(category: str, dimensions: tuple[str, ...] = ()) -> tuple[str, ...]:
+def exposure_dimensions_for(
+    category: str, dimensions: tuple[str, ...] = ()
+) -> tuple[str, ...]:
     if dimensions:
         return dimensions
     return EXPOSURE_BY_CATEGORY.get(category, ())
@@ -958,7 +1032,7 @@ CUSTOM_RULES = (
         ("python",),
         ("ruff:S113",),
         ("blast_radius", "dependency_concentration", "feedback_delay"),
-        "Keeps timeout risk in the antifragility report beside non-Python cancellation and cascade signals.",
+        "Keeps timeout risk in the fragility report beside non-Python cancellation and cascade signals.",
     ),
     RuleInfo(
         "fetch-without-abort",
@@ -983,15 +1057,18 @@ def rule_info_for_pattern(pattern: Pattern) -> RuleInfo:
         source_kinds=pattern.source_kinds,
         languages=pattern.languages,
         linter_overlaps=pattern.linter_overlaps,
-        exposure_dimensions=exposure_dimensions_for(pattern.category, pattern.exposure_dimensions),
+        exposure_dimensions=exposure_dimensions_for(
+            pattern.category, pattern.exposure_dimensions
+        ),
         scanner_value=pattern.scanner_value,
     )
 
 
 def all_rule_info() -> list[RuleInfo]:
-    return sorted((rule_info_for_pattern(pattern) for pattern in PATTERNS), key=lambda item: item.id) + sorted(
-        CUSTOM_RULES, key=lambda item: item.id
-    )
+    return sorted(
+        (rule_info_for_pattern(pattern) for pattern in PATTERNS),
+        key=lambda item: item.id,
+    ) + sorted(CUSTOM_RULES, key=lambda item: item.id)
 
 
 def rule_info_as_dict(rule: RuleInfo) -> dict[str, object]:
@@ -1010,7 +1087,7 @@ def rule_info_as_dict(rule: RuleInfo) -> dict[str, object]:
 
 def rules_markdown(rules: list[RuleInfo]) -> str:
     lines = [
-        "# Antifragile Scanner Rules",
+        "# Fragility Scanner Rules",
         "",
         f"{len(rules)} rule(s). Empty language lists mean the rule can apply across supported text languages.",
         "",
@@ -1034,7 +1111,9 @@ def rules_markdown(rules: list[RuleInfo]) -> str:
     return "\n".join(lines).rstrip()
 
 
-def skip_reason(root: Path, path: Path, exclude_globs: list[str], scanner_path: Path) -> str | None:
+def skip_reason(
+    root: Path, path: Path, exclude_globs: list[str], scanner_path: Path
+) -> str | None:
     rel = rel_path(path, root)
     if path.resolve() == scanner_path and root in scanner_path.parents:
         return "self-scanner"
@@ -1053,15 +1132,21 @@ def find_pattern_matches(
     omitted_counts: dict[str, int],
 ):
     findings: list[Finding] = []
-    compiled = [(pattern, re.compile(pattern.regex, re.IGNORECASE)) for pattern in PATTERNS]
+    compiled = [
+        (pattern, re.compile(pattern.regex, re.IGNORECASE)) for pattern in PATTERNS
+    ]
     source_kind = classify_path(path)
     language = language_for_path(path)
 
     for finding in custom_file_findings(root, path, source_kind, language, text):
         if pattern_counts.get(finding.pattern_id, 0) >= max_per_pattern:
-            omitted_counts[finding.pattern_id] = omitted_counts.get(finding.pattern_id, 0) + 1
+            omitted_counts[finding.pattern_id] = (
+                omitted_counts.get(finding.pattern_id, 0) + 1
+            )
             continue
-        pattern_counts[finding.pattern_id] = pattern_counts.get(finding.pattern_id, 0) + 1
+        pattern_counts[finding.pattern_id] = (
+            pattern_counts.get(finding.pattern_id, 0) + 1
+        )
         findings.append(finding)
 
     lines = text.splitlines()
@@ -1078,7 +1163,10 @@ def find_pattern_matches(
                 continue
             if ignore_applies(line, pattern.id):
                 continue
-            if pattern.id == "hardcoded-endpoint" and path.suffix.lower() in {".md", ".txt"}:
+            if pattern.id == "hardcoded-endpoint" and path.suffix.lower() in {
+                ".md",
+                ".txt",
+            }:
                 continue
             candidate = search_line
             if pattern.id in ("silent-exception", "test-swallowed-exception"):
@@ -1099,20 +1187,28 @@ def find_pattern_matches(
                         concept=pattern.concept,
                         why=pattern.why,
                         linter_overlaps=linter_overlaps_for_pattern(pattern, candidate),
-                        exposure_dimensions=exposure_dimensions_for(pattern.category, pattern.exposure_dimensions),
+                        exposure_dimensions=exposure_dimensions_for(
+                            pattern.category, pattern.exposure_dimensions
+                        ),
                         scanner_value=pattern.scanner_value,
                         snippet=candidate.strip()[:220],
                     )
                 )
 
-        custom = custom_line_findings(root, path, source_kind, language, line_number, line)
+        custom = custom_line_findings(
+            root, path, source_kind, language, line_number, line
+        )
         for finding in custom:
             if ignore_applies(line, finding.pattern_id):
                 continue
             if pattern_counts.get(finding.pattern_id, 0) >= max_per_pattern:
-                omitted_counts[finding.pattern_id] = omitted_counts.get(finding.pattern_id, 0) + 1
+                omitted_counts[finding.pattern_id] = (
+                    omitted_counts.get(finding.pattern_id, 0) + 1
+                )
                 continue
-            pattern_counts[finding.pattern_id] = pattern_counts.get(finding.pattern_id, 0) + 1
+            pattern_counts[finding.pattern_id] = (
+                pattern_counts.get(finding.pattern_id, 0) + 1
+            )
             findings.append(finding)
 
     return findings
@@ -1137,7 +1233,9 @@ def python_tests_without_assertions(text: str) -> list[tuple[int, str]]:
         return []
     found = []
     for node in ast.walk(tree):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or not node.name.startswith("test"):
+        if not isinstance(
+            node, (ast.FunctionDef, ast.AsyncFunctionDef)
+        ) or not node.name.startswith("test"):
             continue
         asserts = False
         for sub in ast.walk(node):
@@ -1145,14 +1243,28 @@ def python_tests_without_assertions(text: str) -> list[tuple[int, str]]:
                 asserts = True
             elif isinstance(sub, ast.Call):
                 target = sub.func
-                name = target.attr if isinstance(target, ast.Attribute) else getattr(target, "id", "")
-                if name.startswith("assert") or name in {"raises", "fail", "expect", "verify", "snapshot"}:
+                name = (
+                    target.attr
+                    if isinstance(target, ast.Attribute)
+                    else getattr(target, "id", "")
+                )
+                if name.startswith("assert") or name in {
+                    "raises",
+                    "fail",
+                    "expect",
+                    "verify",
+                    "snapshot",
+                }:
                     asserts = True
             elif isinstance(sub, ast.With):
                 for item in sub.items:
                     call = item.context_expr
                     func = call.func if isinstance(call, ast.Call) else None
-                    attr = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+                    attr = (
+                        func.attr
+                        if isinstance(func, ast.Attribute)
+                        else getattr(func, "id", "")
+                    )
                     if attr in {"raises", "assertRaises", "assertRaisesRegex", "warns"}:
                         asserts = True
             if asserts:
@@ -1197,7 +1309,9 @@ def custom_file_findings(
                 concept=concept,
                 why=why,
                 linter_overlaps=(),
-                exposure_dimensions=exposure_dimensions_for(category, exposure_dimensions),
+                exposure_dimensions=exposure_dimensions_for(
+                    category, exposure_dimensions
+                ),
                 scanner_value=scanner_value,
                 snippet=snippet,
             )
@@ -1229,7 +1343,9 @@ def custom_file_findings(
             snippet,
         )
 
-    if language == "github-actions" and not re.search(r"^\s*concurrency\s*:", text, re.IGNORECASE | re.MULTILINE):
+    if language == "github-actions" and not re.search(
+        r"^\s*concurrency\s*:", text, re.IGNORECASE | re.MULTILINE
+    ):
         line_number, snippet = first_nonempty_line(text)
         add(
             "github-actions-missing-concurrency",
@@ -1243,7 +1359,9 @@ def custom_file_findings(
 
     rel = rel_path(path, root)
     if DATA_CHANGE_PATH_RE.search(rel) and DATA_MUTATION_RE.search(text):
-        mutation_match = first_matching_line(text, DATA_MUTATION_RE.pattern) or first_nonempty_line(text)
+        mutation_match = first_matching_line(
+            text, DATA_MUTATION_RE.pattern
+        ) or first_nonempty_line(text)
         line_number, snippet = mutation_match
         if not DATA_DRY_RUN_RE.search(text):
             add(
@@ -1279,7 +1397,9 @@ def custom_file_findings(
             snippet,
         )
 
-    workload_match = first_matching_line(text, r"^\s*kind\s*:\s*(Deployment|StatefulSet|DaemonSet)\s*$")
+    workload_match = first_matching_line(
+        text, r"^\s*kind\s*:\s*(Deployment|StatefulSet|DaemonSet)\s*$"
+    )
     if language == "yaml" and workload_match:
         kind_line, kind_snippet = workload_match
         if not re.search(r"^\s*resources\s*:", text, re.IGNORECASE | re.MULTILINE):
@@ -1292,7 +1412,11 @@ def custom_file_findings(
                 kind_line,
                 kind_snippet,
             )
-        if not re.search(r"^\s*(readinessProbe|livenessProbe)\s*:", text, re.IGNORECASE | re.MULTILINE):
+        if not re.search(
+            r"^\s*(readinessProbe|livenessProbe)\s*:",
+            text,
+            re.IGNORECASE | re.MULTILINE,
+        ):
             add(
                 "kubernetes-missing-health-probes",
                 "Silent failure and lost learning",
@@ -1340,12 +1464,17 @@ def custom_line_findings(
                     "Cascade and ruin risk",
                     ("blast_radius", "dependency_concentration", "feedback_delay"),
                 ),
-                scanner_value="Keeps timeout risk in the antifragility report beside non-Python cancellation and cascade signals.",
+                scanner_value="Keeps timeout risk in the fragility report beside non-Python cancellation and cascade signals.",
                 snippet=stripped[:220],
             )
         )
 
-    if language in {"javascript", "typescript"} and re.search(r"\bfetch\s*\(", line) and "signal" not in line and "AbortController" not in line:
+    if (
+        language in {"javascript", "typescript"}
+        and re.search(r"\bfetch\s*\(", line)
+        and "signal" not in line
+        and "AbortController" not in line
+    ):
         findings.append(
             Finding(
                 path=rel_path(path, root),
@@ -1369,10 +1498,18 @@ def custom_line_findings(
     return findings
 
 
-def term_evidence(root: Path, texts: dict[Path, str]) -> tuple[dict[str, int], dict[str, dict[str, int]], dict[str, list[dict[str, object]]]]:
+def term_evidence(
+    root: Path, texts: dict[Path, str]
+) -> tuple[
+    dict[str, int], dict[str, dict[str, int]], dict[str, list[dict[str, object]]]
+]:
     term_counts = dict.fromkeys(PRESENCE_TERMS, 0)
-    term_counts_by_source = {name: dict.fromkeys(SOURCE_KINDS, 0) for name in PRESENCE_TERMS}
-    term_locations: dict[str, list[dict[str, object]]] = {name: [] for name in PRESENCE_TERMS}
+    term_counts_by_source = {
+        name: dict.fromkeys(SOURCE_KINDS, 0) for name in PRESENCE_TERMS
+    }
+    term_locations: dict[str, list[dict[str, object]]] = {
+        name: [] for name in PRESENCE_TERMS
+    }
 
     for path, text in texts.items():
         source_kind = classify_path(path)
@@ -1408,7 +1545,9 @@ def language_file_counts(files: list[Path]) -> dict[str, int]:
     return dict(sorted(counts.items()))
 
 
-def detect_project_signals(root: Path, files: list[Path], texts: dict[Path, str]) -> dict[str, object]:
+def detect_project_signals(
+    root: Path, files: list[Path], texts: dict[Path, str]
+) -> dict[str, object]:
     rels = [rel_path(path, root).lower() for path in files]
     joined_paths = "\n".join(rels)
 
@@ -1420,17 +1559,29 @@ def detect_project_signals(root: Path, files: list[Path], texts: dict[Path, str]
         or "/spec/" in f"/{rel}/"
         or "/__tests__/" in f"/{rel}/"
         or Path(rel).name.startswith("test_")
-        or Path(rel).name.endswith(("_test.py", ".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx", "_test.go"))
+        or Path(rel).name.endswith(
+            ("_test.py", ".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx", "_test.go")
+        )
     ]
 
     ci_files = [
         rel
         for rel in rels
         if rel.startswith(".github/workflows/")
-        or rel in {".gitlab-ci.yml", "circle.yml", ".circleci/config.yml", "azure-pipelines.yml"}
+        or rel
+        in {
+            ".gitlab-ci.yml",
+            "circle.yml",
+            ".circleci/config.yml",
+            "azure-pipelines.yml",
+        }
     ]
 
-    migration_files = [rel for rel in rels if "migration" in rel or "/migrate/" in rel or "/migrations/" in rel]
+    migration_files = [
+        rel
+        for rel in rels
+        if "migration" in rel or "/migrate/" in rel or "/migrations/" in rel
+    ]
     incident_files = [
         rel
         for rel in rels
@@ -1456,7 +1607,10 @@ def detect_project_signals(root: Path, files: list[Path], texts: dict[Path, str]
         "term_locations": term_locations,
         "path_hints": {
             "docs": "docs/" in joined_paths or "/docs/" in joined_paths,
-            "infrastructure": any(part in joined_paths for part in ["terraform", ".tf", "helm", "k8s", "kubernetes"]),
+            "infrastructure": any(
+                part in joined_paths
+                for part in ["terraform", ".tf", "helm", "k8s", "kubernetes"]
+            ),
         },
     }
 
@@ -1470,7 +1624,9 @@ def large_file_signals(root: Path, texts: dict[Path, str]) -> list[dict[str, obj
     return sorted(signals, key=lambda item: item["lines"], reverse=True)[:20]
 
 
-def combined_term_counts(signals: dict[str, object], *names: str) -> tuple[int, dict[str, int]]:
+def combined_term_counts(
+    signals: dict[str, object], *names: str
+) -> tuple[int, dict[str, int]]:
     term_counts = signals["term_counts"]
     term_counts_by_source = signals["term_counts_by_source"]
     total = sum(term_counts[name] for name in names)
@@ -1482,16 +1638,22 @@ def combined_term_counts(signals: dict[str, object], *names: str) -> tuple[int, 
 
 
 def format_source_counts(counts: dict[str, int]) -> str:
-    return ", ".join(f"{source_kind}: {counts[source_kind]}" for source_kind in SOURCE_KINDS)
+    return ", ".join(
+        f"{source_kind}: {counts[source_kind]}" for source_kind in SOURCE_KINDS
+    )
 
 
 def format_language_counts(counts: dict[str, int]) -> str:
     if not counts:
         return "none detected"
-    return ", ".join(f"{language}: {count}" for language, count in sorted(counts.items()))
+    return ", ".join(
+        f"{language}: {count}" for language, count in sorted(counts.items())
+    )
 
 
-def sample_term_locations(signals: dict[str, object], *names: str, max_items: int = 3) -> list[dict[str, object]]:
+def sample_term_locations(
+    signals: dict[str, object], *names: str, max_items: int = 3
+) -> list[dict[str, object]]:
     locations = []
     seen = set()
     term_locations = signals["term_locations"]
@@ -1507,7 +1669,9 @@ def sample_term_locations(signals: dict[str, object], *names: str, max_items: in
     return locations
 
 
-def first_matching_compiled(text: str, regex: re.Pattern[str]) -> tuple[int, str] | None:
+def first_matching_compiled(
+    text: str, regex: re.Pattern[str]
+) -> tuple[int, str] | None:
     for line_number, line in enumerate(text.splitlines(), start=1):
         if regex.search(line):
             return line_number, line.strip()[:220]
@@ -1535,11 +1699,31 @@ def flow_anchor_evidence(root: Path, path: Path, text: str) -> list[dict[str, ob
         )
 
     for kind, detail, regex in (
-        ("entrypoint", "route, handler, job, CLI, webhook, or consumer marker", FLOW_ENTRYPOINT_RE),
-        ("state_mutation", "state mutation or external side-effect marker", FLOW_STATE_RE),
-        ("dependency", "external dependency, queue, provider, subprocess, or HTTP marker", FLOW_DEPENDENCY_RE),
-        ("release_ops", "release, deploy, rollback, canary, or migration marker", FLOW_RELEASE_OPS_RE),
-        ("feedback_loop", "metric, alert, trace, runbook, or incident marker", FLOW_FEEDBACK_RE),
+        (
+            "entrypoint",
+            "route, handler, job, CLI, webhook, or consumer marker",
+            FLOW_ENTRYPOINT_RE,
+        ),
+        (
+            "state_mutation",
+            "state mutation or external side-effect marker",
+            FLOW_STATE_RE,
+        ),
+        (
+            "dependency",
+            "external dependency, queue, provider, subprocess, or HTTP marker",
+            FLOW_DEPENDENCY_RE,
+        ),
+        (
+            "release_ops",
+            "release, deploy, rollback, canary, or migration marker",
+            FLOW_RELEASE_OPS_RE,
+        ),
+        (
+            "feedback_loop",
+            "metric, alert, trace, runbook, or incident marker",
+            FLOW_FEEDBACK_RE,
+        ),
     ):
         match = first_matching_compiled(text, regex)
         if match:
@@ -1549,8 +1733,12 @@ def flow_anchor_evidence(root: Path, path: Path, text: str) -> list[dict[str, ob
     if language == "github-actions":
         add("release_ops", "GitHub Actions workflow file", 1, rel)
     if DATA_CHANGE_ANCHOR_PATH_RE.search(rel):
-        add("state_mutation", "migration, backfill, repair, or data-change path", 1, rel)
-    if re.search(r"(^|/)(api|routes?|controllers?|handlers?|views?|webhooks?)(/|$)", lower_rel):
+        add(
+            "state_mutation", "migration, backfill, repair, or data-change path", 1, rel
+        )
+    if re.search(
+        r"(^|/)(api|routes?|controllers?|handlers?|views?|webhooks?)(/|$)", lower_rel
+    ):
         add("entrypoint", "entrypoint-like path", 1, rel)
     if re.search(r"(^|/)(jobs?|workers?|consumers?|cron|tasks?)(/|$)", lower_rel):
         add("entrypoint", "job, worker, consumer, cron, or task path", 1, rel)
@@ -1562,7 +1750,11 @@ def flow_anchor_evidence(root: Path, path: Path, text: str) -> list[dict[str, ob
 
 def flow_type_for(path: str, language: str, anchor_kinds: list[str]) -> str:
     anchors = set(anchor_kinds)
-    if language == "github-actions" or "release_ops" in anchors and ".github/workflows/" in path:
+    if (
+        language == "github-actions"
+        or "release_ops" in anchors
+        and ".github/workflows/" in path
+    ):
         return "ci/release path"
     if "state_mutation" in anchors and DATA_CHANGE_ANCHOR_PATH_RE.search(path):
         return "data mutation path"
@@ -1577,7 +1769,9 @@ def flow_type_for(path: str, language: str, anchor_kinds: list[str]) -> str:
     return "review path"
 
 
-def trace_question_for(flow_type: str, path: str, exposure_dimensions: list[str]) -> str:
+def trace_question_for(
+    flow_type: str, path: str, exposure_dimensions: list[str]
+) -> str:
     if flow_type == "ci/release path":
         return "Trace from trigger to jobs, permissions, concurrency, dependencies, artifacts, and release or rollback verification if it deploys."
     if flow_type == "data mutation path":
@@ -1591,7 +1785,9 @@ def trace_question_for(flow_type: str, path: str, exposure_dimensions: list[str]
     return f"Trace `{path}` across trigger, state, dependency, failure handling, feedback, and reversal evidence."
 
 
-def critical_flow_candidates(root: Path, texts: dict[Path, str], findings: list[Finding]) -> list[dict[str, object]]:
+def critical_flow_candidates(
+    root: Path, texts: dict[Path, str], findings: list[Finding]
+) -> list[dict[str, object]]:
     findings_by_path: dict[str, list[Finding]] = {}
     for finding in findings:
         findings_by_path.setdefault(finding.path, []).append(finding)
@@ -1600,7 +1796,11 @@ def critical_flow_candidates(root: Path, texts: dict[Path, str], findings: list[
     for path, text in texts.items():
         rel = rel_path(path, root)
         source_kind = classify_path(path)
-        operational_doc = bool(re.search(r"(^|/)(runbooks?|incidents?|postmortems?)(/|$)", rel, re.IGNORECASE))
+        operational_doc = bool(
+            re.search(
+                r"(^|/)(runbooks?|incidents?|postmortems?)(/|$)", rel, re.IGNORECASE
+            )
+        )
         if source_kind == "tests" or (source_kind == "docs" and not operational_doc):
             continue
 
@@ -1624,22 +1824,36 @@ def critical_flow_candidates(root: Path, texts: dict[Path, str], findings: list[
                 or operational_doc
                 or {"entrypoint", "state_mutation", "dependency"} <= anchor_set
                 or {"state_mutation", "dependency"} <= anchor_set
-                or "state_mutation" in anchor_set and DATA_CHANGE_ANCHOR_PATH_RE.search(rel)
+                or "state_mutation" in anchor_set
+                and DATA_CHANGE_ANCHOR_PATH_RE.search(rel)
             )
             if not meaningful_without_exposure:
                 continue
 
         pattern_counts: dict[str, int] = {}
         for finding in path_findings:
-            pattern_counts[finding.pattern_id] = pattern_counts.get(finding.pattern_id, 0) + 1
+            pattern_counts[finding.pattern_id] = (
+                pattern_counts.get(finding.pattern_id, 0) + 1
+            )
         supporting_patterns = [
-            pattern_id for pattern_id, _count in sorted(pattern_counts.items(), key=lambda entry: (-entry[1], entry[0]))[:6]
+            pattern_id
+            for pattern_id, _count in sorted(
+                pattern_counts.items(), key=lambda entry: (-entry[1], entry[0])
+            )[:6]
         ]
 
         language = language_for_path(path)
         flow_type = flow_type_for(rel, language, anchor_kinds)
-        score = len(anchor_set) * 2 + len(exposure_dimensions) * 3 + min(len(path_findings), 6)
-        if flow_type in {"request or job critical path", "data mutation path", "ci/release path"}:
+        score = (
+            len(anchor_set) * 2
+            + len(exposure_dimensions) * 3
+            + min(len(path_findings), 6)
+        )
+        if flow_type in {
+            "request or job critical path",
+            "data mutation path",
+            "ci/release path",
+        }:
             score += 3
 
         candidates.append(
@@ -1653,11 +1867,15 @@ def critical_flow_candidates(root: Path, texts: dict[Path, str], findings: list[
                 "exposure_dimensions": exposure_dimensions,
                 "supporting_patterns": supporting_patterns,
                 "evidence": evidence[:5],
-                "trace_question": trace_question_for(flow_type, rel, exposure_dimensions),
+                "trace_question": trace_question_for(
+                    flow_type, rel, exposure_dimensions
+                ),
             }
         )
 
-    return sorted(candidates, key=lambda item: (-int(item["score"]), str(item["path"])))[:10]
+    return sorted(
+        candidates, key=lambda item: (-int(item["score"]), str(item["path"]))
+    )[:10]
 
 
 def exposure_summary(findings: list[Finding]) -> dict[str, object]:
@@ -1698,11 +1916,15 @@ def exposure_summary(findings: list[Finding]) -> dict[str, object]:
 
         top_patterns = [
             {"pattern_id": pattern_id, "count": count}
-            for pattern_id, count in sorted(pattern_counts.items(), key=lambda entry: (-entry[1], entry[0]))[:5]
+            for pattern_id, count in sorted(
+                pattern_counts.items(), key=lambda entry: (-entry[1], entry[0])
+            )[:5]
         ]
         top_paths = [
             {"path": path, "count": count}
-            for path, count in sorted(path_counts.items(), key=lambda entry: (-entry[1], entry[0]))[:5]
+            for path, count in sorted(
+                path_counts.items(), key=lambda entry: (-entry[1], entry[0])
+            )[:5]
         ]
         dimensions[dimension] = {
             "finding_count": len(items),
@@ -1710,8 +1932,12 @@ def exposure_summary(findings: list[Finding]) -> dict[str, object]:
             "top_patterns": top_patterns,
             "top_paths": top_paths,
             "examples": examples,
-            "review_question": EXPOSURE_REVIEW_QUESTIONS.get(dimension, "What critical flow makes this signal matter?"),
-            "next_move": EXPOSURE_NEXT_MOVES.get(dimension, "Confirm whether these leads sit on an important flow."),
+            "review_question": EXPOSURE_REVIEW_QUESTIONS.get(
+                dimension, "What critical flow makes this signal matter?"
+            ),
+            "next_move": EXPOSURE_NEXT_MOVES.get(
+                dimension, "Confirm whether these leads sit on an important flow."
+            ),
         }
 
     return {
@@ -1733,7 +1959,7 @@ def markdown_report(result: dict[str, object]) -> str:
         grouped.setdefault(finding.category, []).append(finding)
 
     lines = [
-        "# Antifragile Codebase Scan",
+        "# Fragility Scan",
         "",
         f"Scanned {result['project_signals']['files_scanned']} text files under `{result['root']}`.",
         "",
@@ -1744,11 +1970,19 @@ def markdown_report(result: dict[str, object]) -> str:
     ]
 
     signals = result["project_signals"]
-    rollback_total, rollback_by_source = combined_term_counts(signals, "rollback", "dry-run")
-    rollout_total, rollout_by_source = combined_term_counts(signals, "feature-flags", "canary")
+    rollback_total, rollback_by_source = combined_term_counts(
+        signals, "rollback", "dry-run"
+    )
+    rollout_total, rollout_by_source = combined_term_counts(
+        signals, "feature-flags", "canary"
+    )
     chaos_total, chaos_by_source = combined_term_counts(signals, "chaos")
-    observability_total, observability_by_source = combined_term_counts(signals, "observability")
-    incident_total, incident_by_source = combined_term_counts(signals, "incident-learning")
+    observability_total, observability_by_source = combined_term_counts(
+        signals, "observability"
+    )
+    incident_total, incident_by_source = combined_term_counts(
+        signals, "incident-learning"
+    )
     lines.extend(
         [
             f"- Tests present: {'yes' if signals['tests_present'] else 'not detected'} ({signals['test_file_count']} files)",
@@ -1776,7 +2010,10 @@ def markdown_report(result: dict[str, object]) -> str:
         ("Observability/SLO", ("observability",)),
         ("Runbook/postmortem", ("incident-learning",)),
     ]
-    sampled = [(label, sample_term_locations(signals, *names)) for label, names in location_groups]
+    sampled = [
+        (label, sample_term_locations(signals, *names))
+        for label, names in location_groups
+    ]
     sampled = [(label, locations) for label, locations in sampled if locations]
     skipped_files = result["skipped_files"]
     if skipped_files:
@@ -1791,7 +2028,8 @@ def markdown_report(result: dict[str, object]) -> str:
         lines.extend(["### Mention Location Samples", ""])
         for label, locations in sampled:
             rendered = ", ".join(
-                f"`{location['path']}:{location['line']}` [{location['source_kind']}]" for location in locations
+                f"`{location['path']}:{location['line']}` [{location['source_kind']}]"
+                for location in locations
             )
             lines.append(f"- {label}: {rendered}")
         lines.append("")
@@ -1807,12 +2045,18 @@ def markdown_report(result: dict[str, object]) -> str:
     if flow_candidates:
         lines.extend(["## Critical Flow Candidates", ""])
         for item in flow_candidates:
-            lines.append(f"- `{item['path']}` [{item['flow_type']}; score {item['score']}]")
+            lines.append(
+                f"- `{item['path']}` [{item['flow_type']}; score {item['score']}]"
+            )
             lines.append(f"  - Anchors: {', '.join(item['anchor_kinds'])}")
             if item["exposure_dimensions"]:
-                lines.append(f"  - Exposure overlap: {', '.join(item['exposure_dimensions'])}")
+                lines.append(
+                    f"  - Exposure overlap: {', '.join(item['exposure_dimensions'])}"
+                )
             if item["supporting_patterns"]:
-                lines.append(f"  - Supporting patterns: {', '.join(item['supporting_patterns'])}")
+                lines.append(
+                    f"  - Supporting patterns: {', '.join(item['supporting_patterns'])}"
+                )
             lines.append(f"  - Trace question: {item['trace_question']}")
             if item["evidence"]:
                 rendered_evidence = ", ".join(
@@ -1831,8 +2075,12 @@ def markdown_report(result: dict[str, object]) -> str:
             lines.append("")
             lines.append(f"- Findings: {item['finding_count']}")
             lines.append(f"- Categories: {', '.join(item['categories'])}")
-            lines.append(f"- Top patterns: {format_counted_items(item['top_patterns'], 'pattern_id')}")
-            lines.append(f"- Top paths: {format_counted_items(item['top_paths'], 'path')}")
+            lines.append(
+                f"- Top patterns: {format_counted_items(item['top_patterns'], 'pattern_id')}"
+            )
+            lines.append(
+                f"- Top paths: {format_counted_items(item['top_paths'], 'path')}"
+            )
             lines.append(f"- Review question: {item['review_question']}")
             lines.append(f"- Next move: {item['next_move']}")
             if item["examples"]:
@@ -1867,7 +2115,9 @@ def markdown_report(result: dict[str, object]) -> str:
     if finding_overflow:
         lines.extend(["## Capped Finding Overflow", ""])
         for pattern_id, count in sorted(finding_overflow.items()):
-            lines.append(f"- `{pattern_id}`: {count} additional matches omitted by `--max-per-pattern`")
+            lines.append(
+                f"- `{pattern_id}`: {count} additional matches omitted by `--max-per-pattern`"
+            )
         lines.append("")
 
     lines.extend(
@@ -1888,7 +2138,15 @@ def main() -> int:
     if args.list_rules:
         rules = all_rule_info()
         if args.json:
-            print(json.dumps({"rule_count": len(rules), "rules": [rule_info_as_dict(rule) for rule in rules]}, indent=2))
+            print(
+                json.dumps(
+                    {
+                        "rule_count": len(rules),
+                        "rules": [rule_info_as_dict(rule) for rule in rules],
+                    },
+                    indent=2,
+                )
+            )
         else:
             print(rules_markdown(rules))
         return 0
@@ -1915,11 +2173,20 @@ def main() -> int:
             continue
         text, read_skip_reason = read_text(path)
         if text is None:
-            skipped_files.append({"path": rel_path(path, root), "reason": read_skip_reason or "read-error"})
+            skipped_files.append(
+                {
+                    "path": rel_path(path, root),
+                    "reason": read_skip_reason or "read-error",
+                }
+            )
             continue
         files.append(path)
         texts[path] = text
-        findings.extend(find_pattern_matches(root, path, text, args.max_per_pattern, pattern_counts, omitted_counts))
+        findings.extend(
+            find_pattern_matches(
+                root, path, text, args.max_per_pattern, pattern_counts, omitted_counts
+            )
+        )
 
     result = {
         "root": root.as_posix(),

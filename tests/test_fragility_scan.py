@@ -8,9 +8,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SCANNER = (
-    ROOT / "skills" / "antifragile-software-review" / "scripts" / "antifragile_scan.py"
-)
+SCANNER = ROOT / "skills" / "fragility-review" / "scripts" / "fragility_scan.py"
 
 
 def write_file(root: Path, relative_path: str, text: str) -> None:
@@ -65,7 +63,7 @@ def run_scanner_text(*args: str) -> str:
     return result.stdout
 
 
-class AntifragileScanTest(unittest.TestCase):
+class FragilityScanTest(unittest.TestCase):
     def test_list_rules_outputs_rule_metadata_without_repo_scan(self) -> None:
         rules = run_scanner_json("--list-rules", "--json")
         report = run_scanner_text("--list-rules")
@@ -82,7 +80,7 @@ class AntifragileScanTest(unittest.TestCase):
         )
         self.assertIn("data-change-missing-dry-run", rules_by_id)
         self.assertIn("github-actions-missing-concurrency", rules_by_id)
-        self.assertIn("# Antifragile Scanner Rules", report)
+        self.assertIn("# Fragility Scanner Rules", report)
         self.assertIn("## data-change-missing-dry-run", report)
 
     def test_detects_code_findings_without_turning_docs_into_findings(self) -> None:
@@ -211,9 +209,9 @@ class MoneyTest(unittest.TestCase):
                 """
 try:
     risky()
-except Exception: pass  # antifragile-scan: ignore[silent-exception]
+except Exception: pass  # fragility-scan: ignore[silent-exception]
 
-while True:  # antifragile-scan: ignore
+while True:  # fragility-scan: ignore
     break
 """,
             )
@@ -277,13 +275,13 @@ while True:  # antifragile-scan: ignore
 
         self.assertIn(
             {
-                "path": "skills/antifragile-software-review/scripts/antifragile_scan.py",
+                "path": "skills/fragility-review/scripts/fragility_scan.py",
                 "reason": "self-scanner",
             },
             scan["skipped_files"],
         )
         self.assertNotIn(
-            "skills/antifragile-software-review/scripts/antifragile_scan.py",
+            "skills/fragility-review/scripts/fragility_scan.py",
             {finding["path"] for finding in scan["findings"]},
         )
 

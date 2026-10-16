@@ -15,7 +15,7 @@ class SkillEvaluationScenarioTest(unittest.TestCase):
         text = (
             ROOT
             / "skills"
-            / "antifragile-software-review"
+            / "fragility-review"
             / "references"
             / "evaluation-scenarios.md"
         ).read_text(encoding="utf-8")
@@ -49,7 +49,7 @@ class SkillEvaluationScenarioTest(unittest.TestCase):
                 str(
                     ROOT
                     / "skills"
-                    / "antifragile-software-review"
+                    / "fragility-review"
                     / "templates"
                     / "review-scorecard.md"
                 ),

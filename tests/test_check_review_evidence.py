@@ -7,13 +7,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CHECKER = (
-    ROOT
-    / "skills"
-    / "antifragile-software-review"
-    / "scripts"
-    / "check_review_evidence.py"
-)
+CHECKER = ROOT / "skills" / "fragility-review" / "scripts" / "check_review_evidence.py"
 
 
 def check(review: str, repo_files: dict[str, str]) -> subprocess.CompletedProcess[str]:
@@ -120,6 +114,18 @@ class ReviewEvidenceTest(unittest.TestCase):
         self.assertEqual(1, any_line.returncode)
         self.assertIn("FAIL app/missing.py", any_line.stdout)
         self.assertIn("1/2 evidence cites resolve", any_line.stdout)
+
+    def test_any_line_ignores_absolute_runtime_paths(self) -> None:
+        import sys
+
+        review = "Backups live in `/var/backups/db`; the policy is `app/a.py:1`.\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "app").mkdir()
+            (Path(tmp) / "app" / "a.py").write_text("x = 1\n", encoding="utf-8")
+            result = subprocess.run([sys.executable, str(CHECKER), "-", "--root", tmp, "--any-line"],
+                                    input=review, capture_output=True, text=True, check=False)  # fmt: skip
+        self.assertEqual(0, result.returncode, result.stdout)
+        self.assertIn("1/1 evidence cites resolve", result.stdout)
 
     def test_review_without_cites_fails(self) -> None:
         result = check("No findings.", {"app/a.py": "x\n"})

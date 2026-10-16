@@ -1,11 +1,10 @@
 # Critical Flow Service Golden Review
 
-## Antifragility Thesis
+## Review Summary
 
 - System shape: small billing service with a request path that writes invoice state and calls an external billing provider.
-- Primary stressors: billing provider latency, provider failure, duplicate requests, partial local writes, and weak deploy coordination.
-- Fragility hypothesis: provider failure can become incorrect local charge state because the flow mutates state before and after a dependency call while swallowing provider errors.
-- Antifragile opportunity: bound provider downside with timeouts and error-state handling, then turn provider failures into tests and telemetry.
+- Stressors and actors: billing provider latency, provider failure, duplicate requests, partial local writes, and weak deploy coordination.
+- Hypothesis: provider failure can become incorrect local charge state because the flow mutates state before and after a dependency call while swallowing provider errors.
 - Evidence confidence: direct fixture code and CI config evidence; runtime alert ownership is unknown.
 
 ## System Map
@@ -28,7 +27,6 @@
 | Observability and ownership | Billing runbook exists. | Alert routing and dashboard. | Inspect alert routing for billing failures. |
 | Rollback/degradation path | Runbook says rollback path is not documented. | Kill switch or degraded mode. | Add rollback instructions or a feature flag check to the runbook. |
 
-- Stress response curve: superlinear.
 - Scanner leads that matter: `python-http-without-timeout`, `silent-exception`, `github-actions-missing-concurrency`.
 - Scanner leads deferred: none.
 
@@ -46,13 +44,12 @@
 - Evidence quality: direct critical-flow path.
 - Analysis area: dependency / data / observability.
 - Exposure score: 12/15.
-- Fragility: provider latency or failure is hidden while local state can still move to `charged`.
+- Harm: provider latency or failure is hidden while local state can still move to `charged`.
 - Blast radius: customer billing trust and invoice correctness.
 - Reversibility: partial; local state repair is possible but manual and uncertain.
-- Stress response curve: superlinear.
-- Antifragile move: add an explicit timeout, preserve failed charge state, emit a metric/log, and add a provider-timeout regression test.
-- Gain mechanism: faster learning and smaller blast radius.
-- Robust vs antifragile delta: the timeout bounds the dependency; the regression test and telemetry convert provider failure into future learning.
+- Invariant: an invoice is marked charged only after the provider confirmed the charge.
+- Control strength: today C0, errors are swallowed and state moves to charged regardless -> after the change C4, state follows the provider result with a timeout, proven by the provider-timeout test; required C4 (money moves).
+- Change: add an explicit timeout, preserve failed charge state, emit a metric/log, and add a provider-timeout regression test.
 - Missing evidence: alert owner, idempotency key, and rollback path.
 - Cheapest observation: reproduce a provider timeout against a fake billing endpoint and assert invoice state plus telemetry.
 - Validation: unit test with provider timeout plus scanner output containing `python-http-without-timeout` and `silent-exception` before the fix.
@@ -60,9 +57,9 @@
 
 ## Backlog
 
-- Via negativa: remove swallowed exception behavior.
+- Remove first: remove swallowed exception behavior.
 - Reversibility and optionality: document billing rollback and add idempotency evidence.
-- Stress-learning experiments: fake provider timeout test.
+- Safe stress tests: fake provider timeout test.
 - Observability and ownership: billing alert route and dashboard.
 - Structural bets: only isolate provider behind an adapter if provider churn or a second provider becomes plausible.
 - Missing evidence / cheapest observations: inspect route caller and alert routing.

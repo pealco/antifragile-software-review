@@ -51,6 +51,10 @@ def cites(review: str, any_line: bool = False) -> list[tuple[str, int | None, bo
             path = match["path"]
             if "/" not in path and path.rsplit(".", 1)[-1] not in SOURCE_EXTENSIONS:
                 continue
+            if any_line and path.startswith(
+                "/"
+            ):  # a runtime path, not a repository cite
+                continue
             # "5,7-10,12" cites several ranges; the last line cited is the one that can overrun.
             lines = [int(n) for n in re.findall(r"\d+", match["lines"] or "")]
             absent = bool(

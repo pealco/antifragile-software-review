@@ -1,11 +1,10 @@
 # Optionality Without Premature Abstraction Golden Review
 
-## Antifragility Thesis
+## Review Summary
 
 - System shape: small provider wrapper and proposal for a broad provider adapter.
-- Primary stressors: future provider churn and possible dependency changes.
-- Fragility hypothesis: the proposed abstraction may add carrying cost without real optionality because no second provider or switching pressure exists.
-- Antifragile opportunity: preserve optionality with contract notes and localized isolation until evidence justifies a broader boundary.
+- Stressors and actors: future provider churn and possible dependency changes.
+- Hypothesis: the proposed abstraction may add carrying cost without real optionality because no second provider or switching pressure exists.
 - Evidence confidence: docs-only proposal plus small code fixture.
 
 ## System Map
@@ -28,7 +27,6 @@
 | Observability and ownership | none visible. | provider health metrics or owner. | Add provider failure metric if call path is critical. |
 | Rollback/degradation path | not visible. | switching or fallback path. | Document vendor-exit trigger and minimum boundary. |
 
-- Stress response curve: linear.
 - Scanner leads that matter: none.
 - Scanner leads deferred: none.
 
@@ -46,13 +44,12 @@
 - Evidence quality: docs-only with small code fixture.
 - Analysis area: architecture / dependency.
 - Exposure score: 4/15.
-- Fragility: adding a broad adapter can hide failure modes and impose maintenance cost without proving option value.
+- Harm: adding a broad adapter can hide failure modes and impose maintenance cost without proving option value.
 - Blast radius: low in fixture; real call sites are unknown.
 - Reversibility: high because the adapter is only proposed.
-- Stress response curve: linear.
-- Antifragile move: Do not build the adapter yet. Add contract tests, timeout/failure notes, and a vendor-exit trigger around the current provider.
-- Gain mechanism: dependency optionality without premature carrying cost.
-- Robust vs antifragile delta: a broad adapter is not automatically antifragile; evidence-gated optionality preserves future choices cheaply.
+- Invariant: none at risk; the finding is about carrying cost, not a harm path.
+- Control strength: not applicable; required C2 at most, since the change is reversible and bounded.
+- Change: Do not build the adapter yet. Add contract tests, timeout/failure notes, and a vendor-exit trigger around the current provider.
 - Missing evidence: second provider, provider churn, critical call sites, and switching pressure.
 - Cheapest observation: identify a plausible second provider or observe provider-change pressure before adding a broad boundary.
 - Validation: contract test around current provider behavior plus a documented threshold for revisiting abstraction.
@@ -60,9 +57,9 @@
 
 ## Backlog
 
-- Via negativa: avoid broad adapter until uncertainty is real.
+- Remove first: avoid broad adapter until uncertainty is real.
 - Reversibility and optionality: document vendor-exit trigger.
-- Stress-learning experiments: provider contract test.
+- Safe stress tests: provider contract test.
 - Observability and ownership: add provider failure metrics only if call path is critical.
 - Structural bets: revisit adapter after second-provider evidence appears.
 - Missing evidence / cheapest observations: trace real provider call sites.
