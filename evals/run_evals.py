@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run lightweight executable checks for the fragility review skill scenarios."""
+"""Run lightweight executable checks for the hardening review skill scenarios."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL_DIR = ROOT / "skills" / "fragility-review"
+SKILL_DIR = ROOT / "skills" / "hardening-review"
 SCANNER = SKILL_DIR / "scripts" / "fragility_scan.py"
 SCENARIOS = SKILL_DIR / "references" / "evaluation-scenarios.md"
 FIXTURES = ROOT / "evals" / "fixtures"

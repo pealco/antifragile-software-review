@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Heuristic scanner for fragility review leads: places where stress or a mistake can cause harm."""
+"""Heuristic scanner for the hardening review: leads to places where stress or a mistake can cause harm."""
 
 from __future__ import annotations
 

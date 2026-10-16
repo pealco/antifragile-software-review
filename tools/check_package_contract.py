@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL_DIR = ROOT / "skills" / "fragility-review"
+SKILL_DIR = ROOT / "skills" / "hardening-review"
 README = ROOT / "README.md"
 SKILL = SKILL_DIR / "SKILL.md"
 VERSION = ROOT / "VERSION"
@@ -100,8 +100,8 @@ def check_skill_frontmatter_and_references() -> None:
     if missing_fields:
         fail(f"SKILL.md frontmatter missing field(s): {', '.join(missing_fields)}")
 
-    if fields["name"] != "fragility-review":
-        fail("SKILL.md frontmatter name must be fragility-review")
+    if fields["name"] != "hardening-review":
+        fail("SKILL.md frontmatter name must be hardening-review")
 
     # Agent Skills spec limit. Every client reads description, so it must carry the triggers.
     if len(fields["description"]) > 1024:
@@ -155,8 +155,8 @@ def check_generated_rule_catalog() -> None:
     if read_text(RULES) != result.stdout:
         fail(
             "references/scanner-rules.md is stale; regenerate it with "
-            "python3 skills/fragility-review/scripts/fragility_scan.py --list-rules "
-            "> skills/fragility-review/references/scanner-rules.md"
+            "python3 skills/hardening-review/scripts/fragility_scan.py --list-rules "
+            "> skills/hardening-review/references/scanner-rules.md"
         )
 
 
@@ -181,8 +181,8 @@ def check_plugin_manifests(version: str) -> None:
     """plugin.json and marketplace.json carry the released version and point at the skill."""
     plugin = json.loads(read_text(PLUGIN))
     marketplace = json.loads(read_text(MARKETPLACE))
-    if plugin.get("name") != "fragility-review":
-        fail(f"{PLUGIN} name must be fragility-review")
+    if plugin.get("name") != "hardening-review":
+        fail(f"{PLUGIN} name must be hardening-review")
     if plugin.get("version") != version:
         fail(f"{PLUGIN} version is {plugin.get('version')}; VERSION is {version}")
     entries = [

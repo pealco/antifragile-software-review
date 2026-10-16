@@ -7,13 +7,14 @@
     "url": "https://github.com/pealco"
   },
   "renames": {
-    "antifragile-software-review": "fragility-review"
+    "antifragile-software-review": "hardening-review",
+    "fragility-review": "hardening-review"
   },
   "plugins": [
     {
-      "name": "fragility-review",
+      "name": "hardening-review",
       "description": "Review of what would hurt a software system under stress or through a mistake: traces one critical flow, rates the control that stops each human or coding-agent mistake, scores exposure, and either reports findings or patches the highest-risk reversible issue. Bundles a dependency-free scanner, an evidence checker, and a test-strength checker.",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "category": "code-review",
       "source": "./"
     }

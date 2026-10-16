@@ -1,4 +1,4 @@
-# Fragility Review Playbook
+# Hardening Review Playbook
 
 This playbook keeps the review focused on where stress or a mistake can cause harm: architecture, operating model, design decisions, controls, and feedback loops. The scanner is useful evidence, but it is not the review.
 

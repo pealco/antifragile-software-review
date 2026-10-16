@@ -1,4 +1,4 @@
-# Fragility Review Scorecard
+# Hardening Review Scorecard
 
 ## Review Summary
 

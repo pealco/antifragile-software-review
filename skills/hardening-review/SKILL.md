@@ -1,13 +1,13 @@
 ---
-name: fragility-review
+name: hardening-review
 description: Use when the user wants to find, rank, or reduce what would hurt a software system under stress or through a mistake, or to check whether its tests and controls would catch one, whatever words they use (antifragile, resilient, poka-yoke, mistake-proof, idiot-proof, safe for coding agents, what breaks badly here). Covers irreversible or hard-to-undo operations (migrations, bulk updates, deletes, deploys), single points of failure, kill switches, rollbacks, and restores nobody has exercised, incidents that never became tests or alerts, test suites that would still pass on wrong code, code that people and coding agents keep getting wrong, and vendor lock-in decisions. Traces one critical flow, rates the control that stops each mistake, scores exposure, then reports findings (audit wording such as review or assess) or patches the highest-risk reversible issue (action wording such as harden, fix, or make). Not for line-level bug review, security audits, performance tuning, or feature work.
 argument-hint: "[repo-path or focus]"
 license: MIT
 compatibility: Requires Python 3.10+ for the bundled scripts. Needs no network access.
-allowed-tools: Bash(python3 *skills/fragility-review/scripts/fragility_scan.py*) Bash(python3 *skills/fragility-review/scripts/check_review_evidence.py*) Bash(python3 *skills/fragility-review/scripts/check_test_strength.py*)
+allowed-tools: Bash(python3 *skills/hardening-review/scripts/fragility_scan.py*) Bash(python3 *skills/hardening-review/scripts/check_review_evidence.py*) Bash(python3 *skills/hardening-review/scripts/check_test_strength.py*)
 ---
 
-# Fragility Review
+# Hardening Review
 
 ## Overview
 

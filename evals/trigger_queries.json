@@ -1,5 +1,5 @@
 [
-  {"id": "t01", "split": "train", "should_trigger": true, "query": "Use the fragility-review skill to audit ~/code/payments-service."},
+  {"id": "t01", "split": "train", "should_trigger": true, "query": "Use the hardening-review skill to audit ~/code/payments-service."},
   {"id": "t02", "split": "train", "should_trigger": true, "query": "The team says the payouts service is well tested. Check whether those tests could actually fail if the code were wrong, and tell me the worst gap."},
   {"id": "t03", "split": "validation", "should_trigger": true, "query": "where is our deploy pipeline merely robust instead of actually getting better from failures? we had 3 rollbacks last quarter and nothing changed afterwards"},
   {"id": "t04", "split": "validation", "should_trigger": true, "query": "can u look at this codebase and tell me whats fragile? like what breaks badly if the billing provider goes down or a migration goes wrong"},

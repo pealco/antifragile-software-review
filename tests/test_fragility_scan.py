@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SCANNER = ROOT / "skills" / "fragility-review" / "scripts" / "fragility_scan.py"
+SCANNER = ROOT / "skills" / "hardening-review" / "scripts" / "fragility_scan.py"
 
 
 def write_file(root: Path, relative_path: str, text: str) -> None:
@@ -275,13 +275,13 @@ while True:  # fragility-scan: ignore
 
         self.assertIn(
             {
-                "path": "skills/fragility-review/scripts/fragility_scan.py",
+                "path": "skills/hardening-review/scripts/fragility_scan.py",
                 "reason": "self-scanner",
             },
             scan["skipped_files"],
         )
         self.assertNotIn(
-            "skills/fragility-review/scripts/fragility_scan.py",
+            "skills/hardening-review/scripts/fragility_scan.py",
             {finding["path"] for finding in scan["findings"]},
         )
 

@@ -1,4 +1,4 @@
-# Example Fragility Review Scorecard
+# Example Hardening Review Scorecard
 
 This example shows the intended level of specificity for a small service review. It is illustrative, not evidence for this repository.
 

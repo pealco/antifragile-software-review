@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CHECKER = ROOT / "skills" / "fragility-review" / "scripts" / "check_review_evidence.py"
+CHECKER = ROOT / "skills" / "hardening-review" / "scripts" / "check_review_evidence.py"
 
 
 def check(review: str, repo_files: dict[str, str]) -> subprocess.CompletedProcess[str]:

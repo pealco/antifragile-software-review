@@ -1,5 +1,5 @@
 {
-  "skill_name": "fragility-review",
+  "skill_name": "hardening-review",
   "method_assertions": [
     "The review traces one critical flow step by step (trigger, state change, dependencies, failure handling, rollback) before it ranks findings.",
     "The review reports an exposure score out of 15 for its top finding and names all five factors: blast radius, irreversibility, feedback delay, dependency concentration, and ruin potential.",

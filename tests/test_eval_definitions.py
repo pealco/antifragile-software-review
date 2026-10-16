@@ -42,7 +42,7 @@ class OutputEvalsTest(unittest.TestCase):
         self.spec = json.loads((ROOT / "evals" / "evals.json").read_text())
 
     def test_skill_name_matches_skill_md(self) -> None:
-        skill = (ROOT / "skills" / "fragility-review" / "SKILL.md").read_text()
+        skill = (ROOT / "skills" / "hardening-review" / "SKILL.md").read_text()
         self.assertIn(f"name: {self.spec['skill_name']}\n", skill)
 
     def test_cases_point_at_real_files_and_known_checks(self) -> None:

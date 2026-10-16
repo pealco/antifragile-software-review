@@ -17,10 +17,10 @@ jobs:
         with:
           python-version: "3.x"
       - name: Check Python syntax
-        run: python -m py_compile skills/fragility-review/scripts/*.py tools/*.py tests/*.py evals/*.py evals/challenges/*.py
+        run: python -m py_compile skills/hardening-review/scripts/*.py tools/*.py tests/*.py evals/*.py evals/challenges/*.py
       - name: Run package contract checks
         run: python tools/check_package_contract.py
       - name: Run unit tests
         run: python -m unittest discover -s tests
       - name: Run executable skill evals
-        run: python evals/run_evals.py --review-output skills/fragility-review/templates/review-scorecard.md
+        run: python evals/run_evals.py --review-output skills/hardening-review/templates/review-scorecard.md

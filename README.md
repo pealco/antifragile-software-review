@@ -1,4 +1,4 @@
-# Fragility Review
+# Hardening Review
 
 [![Tests](https://github.com/pealco/antifragile-software-review/actions/workflows/test.yml/badge.svg)](https://github.com/pealco/antifragile-software-review/actions/workflows/test.yml)
 
@@ -8,7 +8,7 @@ The goal is not to make code perfect or to eliminate failure. The goal is a code
 
 ## What It Does
 
-Fragility Review gives an agent a structured way to review a repository for design choices that get worse under stress or that invite mistakes. It asks the agent to build a system map, identify critical flows, trace at least one high-exposure path, rate the control that stops each mistake along it, score exposure, and recommend changes that bound the downside, stop the mistake at its source, or turn failures into learning.
+Hardening Review gives an agent a structured way to review a repository for design choices that get worse under stress or that invite mistakes. It asks the agent to build a system map, identify critical flows, trace at least one high-exposure path, rate the control that stops each mistake along it, score exposure, and recommend changes that bound the downside, stop the mistake at its source, or turn failures into learning.
 
 In practice, the skill helps find questions like:
 
@@ -37,20 +37,20 @@ What the evals show, as of October 2026: on three fixtures, Claude Opus 5.5 find
 
 This repository contains:
 
-- `skills/fragility-review/`: the skill itself, laid out as an Agent Skill: `SKILL.md`, with `references/`, `scripts/`, `templates/`, and `examples/` beside it.
+- `skills/hardening-review/`: the skill itself, laid out as an Agent Skill: `SKILL.md`, with `references/`, `scripts/`, `templates/`, and `examples/` beside it.
 - `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`: the Claude Code plugin manifest and the one-entry marketplace that makes this repository installable with `/plugin install`.
 - `VERSION`: the released version; the manifests and the install examples must agree with it, and the contract check enforces that.
-- `skills/fragility-review/references/review-playbook.md`: the system-level review method for architecture, operations, release, data, dependency, testing, and incident-learning analysis.
-- `skills/fragility-review/references/lenses.md`: the ideas behind the method, one lens each: mistake-proofing (Shingo), human error (Reason, Norman), system safety (Leveson, Hollnagel), dependability (Avižienis), and antifragility (Taleb).
-- `skills/fragility-review/references/evaluation-scenarios.md`: representative behavior checks for keeping the skill architecture-first, evidence-driven, and resistant to scanner overfitting.
-- `skills/fragility-review/references/scanner-rules.md`: generated scanner rule metadata for reviewing coverage, linter overlap, and exposure dimensions.
-- `skills/fragility-review/scripts/fragility_scan.py`: a dependency-free Python scanner that surfaces review leads across several languages, runtimes, and infrastructure files.
+- `skills/hardening-review/references/review-playbook.md`: the system-level review method for architecture, operations, release, data, dependency, testing, and incident-learning analysis.
+- `skills/hardening-review/references/lenses.md`: the ideas behind the method, one lens each: mistake-proofing (Shingo), human error (Reason, Norman), system safety (Leveson, Hollnagel), dependability (Avižienis), and antifragility (Taleb).
+- `skills/hardening-review/references/evaluation-scenarios.md`: representative behavior checks for keeping the skill architecture-first, evidence-driven, and resistant to scanner overfitting.
+- `skills/hardening-review/references/scanner-rules.md`: generated scanner rule metadata for reviewing coverage, linter overlap, and exposure dimensions.
+- `skills/hardening-review/scripts/fragility_scan.py`: a dependency-free Python scanner that surfaces review leads across several languages, runtimes, and infrastructure files.
 - `tools/check_package_contract.py`: a CI-enforced consistency check for skill metadata, references, plugin manifests, release pins, generated docs, and workflow pins.
-- `skills/fragility-review/templates/review-scorecard.md`: a reusable scorecard for critical-flow traces, exposure scoring, and findings.
-- `skills/fragility-review/examples/scorecard-review.md`: a compact example of the review scorecard filled out for a realistic service.
+- `skills/hardening-review/templates/review-scorecard.md`: a reusable scorecard for critical-flow traces, exposure scoring, and findings.
+- `skills/hardening-review/examples/scorecard-review.md`: a compact example of the review scorecard filled out for a realistic service.
 - `evals/`: scanner-and-golden-file checks that run in CI, plus model-in-the-loop evals for triggering and review quality (see Skill Evals).
-- `skills/fragility-review/scripts/check_review_evidence.py`: checks that every file and line a review cites on an `Evidence:` line exists. `SKILL.md` tells the agent to run it before it sends a review.
-- `skills/fragility-review/scripts/check_test_strength.py`: stubs each function out (`return None`, then `return True`) and reruns the test suite; a function whose stub the suite tolerates has no test that depends on its logic. The scanner's `test-*` rules flag the static shapes of a test that cannot fail: an expected value computed by the code under test, loose or call-only assertions, no assertion at all, fixed sleeps, swallowed exceptions, and skips without a reason.
+- `skills/hardening-review/scripts/check_review_evidence.py`: checks that every file and line a review cites on an `Evidence:` line exists. `SKILL.md` tells the agent to run it before it sends a review.
+- `skills/hardening-review/scripts/check_test_strength.py`: stubs each function out (`return None`, then `return True`) and reruns the test suite; a function whose stub the suite tolerates has no test that depends on its logic. The scanner's `test-*` rules flag the static shapes of a test that cannot fail: an expected value computed by the code under test, loose or call-only assertions, no assertion at all, fixed sleeps, swallowed exceptions, and skips without a reason.
 - `docs/mistake-proofing-research.md`: the research behind the mistake-proofing method (poka-yoke, safety science, software practice, coding agents), the control strength scale, and how the method is measured.
 - `evals/challenges/`: challenge tests that feed a known-bad case to a repository after an agent changed it and check that the mistake no longer gets through; `evals/run_agent_trap_evals.py` runs later coding agents against hardened repositories, with tasks from `evals/agent_traps*.json`, and reports whether their changes reopen the mistake.
 
@@ -58,75 +58,75 @@ The scanner is deliberately secondary. It helps discover concrete code smells an
 
 ## Install
 
-This repository is a Claude Code plugin and its own marketplace. The skill inside it follows the Agent Skills layout (`skills/fragility-review/SKILL.md`, with `scripts/`, `references/`, and `templates/` beside it), so it also installs as a plain skill in Claude Code, Codex, or any client that reads `SKILL.md`. The examples below pin `v0.3.0`. Install from `main` only when you want unreleased changes.
+This repository is a Claude Code plugin and its own marketplace. The skill inside it follows the Agent Skills layout (`skills/hardening-review/SKILL.md`, with `scripts/`, `references/`, and `templates/` beside it), so it also installs as a plain skill in Claude Code, Codex, or any client that reads `SKILL.md`. The examples below pin `v0.4.0`. Install from `main` only when you want unreleased changes.
 
 ### Claude Code plugin
 
 One step, in a session (Claude Code 2.1.275 or later):
 
 ```text
-/plugin install fragility-review --marketplace pealco/antifragile-software-review
+/plugin install hardening-review --marketplace pealco/antifragile-software-review
 ```
 
 Or add the marketplace first, pinned to a release, then install:
 
 ```text
-/plugin marketplace add pealco/antifragile-software-review#v0.3.0
-/plugin install fragility-review@pealco
+/plugin marketplace add pealco/antifragile-software-review#v0.4.0
+/plugin install hardening-review@pealco
 ```
 
 From a shell:
 
 ```bash
-claude plugin install fragility-review --marketplace pealco/antifragile-software-review --scope user
+claude plugin install hardening-review --marketplace pealco/antifragile-software-review --scope user
 ```
 
-The skill triggers on its own when a request matches its description. Invoke it by hand with `/fragility-review:fragility-review`. Third-party marketplaces do not auto-update, so update with:
+The skill triggers on its own when a request matches its description. Invoke it by hand with `/hardening-review:hardening-review`. Third-party marketplaces do not auto-update, so update with:
 
 ```bash
-claude plugin update fragility-review@pealco
+claude plugin update hardening-review@pealco
 ```
 
 Remove it with:
 
 ```bash
-claude plugin uninstall fragility-review@pealco
+claude plugin uninstall hardening-review@pealco
 ```
 
-If you installed version 0.2.0 or earlier under the old name `antifragile-software-review`, `claude plugin update` cannot follow the rename: it removes the old record and downloads the new version without registering it. Install the new name (if the uninstall says the plugin is not found, skip it):
+If you installed an earlier version under an old name (`antifragile-software-review` up to 0.2.0, `fragility-review` at 0.3.0), `claude plugin update` cannot follow the rename: it removes the old record and downloads the new version without registering it. Install the new name (if the uninstall says the plugin is not found, skip it):
 
 ```bash
-claude plugin uninstall antifragile-software-review@pealco
-claude plugin install fragility-review@pealco --scope user
+claude plugin uninstall antifragile-software-review@pealco   # or fragility-review@pealco
+claude plugin install hardening-review@pealco --scope user
 ```
 
 Try it for one session without installing:
 
 ```bash
 git clone https://github.com/pealco/antifragile-software-review.git
-claude --plugin-dir ./fragility-review
+claude --plugin-dir ./hardening-review
 ```
 
 ### Claude Code skill directory
 
-Without the plugin system, clone the repository into the personal skills directory. Claude Code loads a folder there that carries `.claude-plugin/plugin.json` as a plugin named `fragility-review@skills-dir` and finds the skill under `skills/`:
+Without the plugin system, clone the repository into the personal skills directory. Claude Code loads a folder there that carries `.claude-plugin/plugin.json` as a plugin named `hardening-review@skills-dir` and finds the skill under `skills/`:
 
 ```bash
 mkdir -p ~/.claude/skills
-git clone --branch v0.3.0 https://github.com/pealco/antifragile-software-review.git \
-  ~/.claude/skills/fragility-review
+git clone --branch v0.4.0 https://github.com/pealco/antifragile-software-review.git \
+  ~/.claude/skills/hardening-review
 ```
 
-Update it with `git -C ~/.claude/skills/fragility-review pull --ff-only`, switch releases with `git -C ~/.claude/skills/fragility-review checkout v0.3.0` after a `fetch --tags`, and uninstall by deleting the directory. Restart Claude Code after installing so the skill index refreshes.
+Update it with `git -C ~/.claude/skills/hardening-review pull --ff-only`, switch releases with `git -C ~/.claude/skills/hardening-review checkout v0.4.0` after a `fetch --tags`, and uninstall by deleting the directory. Restart Claude Code after installing so the skill index refreshes.
 
 For a project-local install, add the repository as a submodule anywhere in the project and link the skill folder into `.claude/skills`:
 
 ```bash
-git submodule add --branch v0.3.0 https://github.com/pealco/antifragile-software-review.git \
-  vendor/fragility-review
+git submodule add --branch v0.4.0 https://github.com/pealco/antifragile-software-review.git \
+  vendor/hardening-review
 mkdir -p .claude/skills
-ln -s ../../vendor/fragility-review/skills/fragility-review \
-  .claude/skills/fragility-review
+ln -s ../../vendor/hardening-review/skills/hardening-review \
+  .claude/skills/hardening-review
 ```
 
 Claude Code exposes the skill directory through `${CLAUDE_SKILL_DIR}`, so the scanner commands in `SKILL.md` work without hard-coded paths.
@@ -138,31 +138,31 @@ Requirements: Codex CLI with local skill support, Git, and Python 3.10 or newer 
 Codex reads `~/.codex/skills/<name>/SKILL.md`, so link the skill folder there:
 
 ```bash
-git clone --branch v0.3.0 https://github.com/pealco/antifragile-software-review.git \
-  ~/src/fragility-review
+git clone --branch v0.4.0 https://github.com/pealco/antifragile-software-review.git \
+  ~/src/hardening-review
 mkdir -p ~/.codex/skills
-ln -s ~/src/fragility-review/skills/fragility-review \
-  ~/.codex/skills/fragility-review
+ln -s ~/src/hardening-review/skills/hardening-review \
+  ~/.codex/skills/hardening-review
 ```
 
-Restart Codex after installing so the skill registry reloads. Update with `git -C ~/src/fragility-review pull --ff-only`; switch releases with `git -C ~/src/fragility-review checkout v0.3.0` after a `fetch --tags`; uninstall by removing the link and the clone.
+Restart Codex after installing so the skill registry reloads. Update with `git -C ~/src/hardening-review pull --ff-only`; switch releases with `git -C ~/src/hardening-review checkout v0.4.0` after a `fetch --tags`; uninstall by removing the link and the clone.
 
 Invoke it explicitly:
 
 ```text
-[$fragility-review] Review this repo for fragility risks.
+[$hardening-review] Review this repo for fragility risks.
 ```
 
 ### Other clients
 
-Copy or link `skills/fragility-review` wherever your client reads Agent Skills. The frontmatter uses one Claude Code-only key, `argument-hint`; clients that reject unknown keys (claude.ai skill uploads do) need it removed.
+Copy or link `skills/hardening-review` wherever your client reads Agent Skills. The frontmatter uses one Claude Code-only key, `argument-hint`; clients that reject unknown keys (claude.ai skill uploads do) need it removed.
 
 Use it naturally in any client:
 
 ```text
 Review this repository for fragility: what breaks badly under stress, and what a person or a coding agent can get wrong.
 Find fragility risks in this design and suggest improvements.
-Use fragility-review to audit this service.
+Use hardening-review to audit this service.
 ```
 
 ## Use
@@ -203,41 +203,41 @@ In implementation mode, each control the skill adds comes with a challenge test:
 The scanner can be run as a standalone Python script. Use it as a discovery tool after you have a rough system map, or as a quick source of review leads when you are exploring unfamiliar code.
 
 ```bash
-python3 skills/fragility-review/scripts/fragility_scan.py .
+python3 skills/hardening-review/scripts/fragility_scan.py .
 ```
 
 Emit JSON for automation:
 
 ```bash
-python3 skills/fragility-review/scripts/fragility_scan.py . --json
+python3 skills/hardening-review/scripts/fragility_scan.py . --json
 ```
 
 Scan specific paths:
 
 ```bash
-python3 skills/fragility-review/scripts/fragility_scan.py src tests config
+python3 skills/hardening-review/scripts/fragility_scan.py src tests config
 ```
 
 Exclude paths:
 
 ```bash
-python3 skills/fragility-review/scripts/fragility_scan.py . --exclude vendor --exclude build
+python3 skills/hardening-review/scripts/fragility_scan.py . --exclude vendor --exclude build
 ```
 
 Limit findings per rule:
 
 ```bash
-python3 skills/fragility-review/scripts/fragility_scan.py . --max-per-pattern 20 --max-file-bytes 2000000
+python3 skills/hardening-review/scripts/fragility_scan.py . --max-per-pattern 20 --max-file-bytes 2000000
 ```
 
 List rule metadata, including rule ids, categories, linter overlaps, and exposure dimensions:
 
 ```bash
-python3 skills/fragility-review/scripts/fragility_scan.py --list-rules
-python3 skills/fragility-review/scripts/fragility_scan.py --list-rules --json
+python3 skills/hardening-review/scripts/fragility_scan.py --list-rules
+python3 skills/hardening-review/scripts/fragility_scan.py --list-rules --json
 ```
 
-The generated Markdown catalog is committed at `skills/fragility-review/references/scanner-rules.md`.
+The generated Markdown catalog is committed at `skills/hardening-review/references/scanner-rules.md`.
 
 ### Suppress Reviewed Signals
 
@@ -263,7 +263,7 @@ Use suppressions sparingly. They are intended for explicit tradeoffs, not for hi
 
 ### What The Review Asks
 
-A fragility review is broader than code linting. It asks where the system gets hurt when reality gets noisy and when the people and agents who change it make mistakes:
+A hardening review is broader than code linting. It asks where the system gets hurt when reality gets noisy and when the people and agents who change it make mistakes:
 
 - Which critical flows fail badly under load, dependency failure, bad deploys, malformed input, or changing requirements?
 - Which decisions are hard to reverse after they meet production data, users, vendors, or infrastructure?
@@ -274,7 +274,7 @@ A fragility review is broader than code linting. It asks where the system gets h
 
 The scanner helps find concrete evidence, but it does not set the agenda. A scanner hit outside a critical path is usually less important than an architectural single point of failure, an irreversible migration path, an unowned alert, or a release process with no safe rollback.
 
-Every control the review relies on is rated from C0 (nothing) to C5 (the mistake cannot be expressed), credited only when a challenge test or drill proves it, and compared with the strength the harm requires: irreversible harm needs C4 or better for every actor who can reach it. Tests are rated the same way, T0 to T5, and a test counts only once it has been seen failing on the fault it guards. The scales, the control audit, and the rules for code that coding agents change are in `skills/fragility-review/references/review-playbook.md`; the ideas behind them are in `skills/fragility-review/references/lenses.md`.
+Every control the review relies on is rated from C0 (nothing) to C5 (the mistake cannot be expressed), credited only when a challenge test or drill proves it, and compared with the strength the harm requires: irreversible harm needs C4 or better for every actor who can reach it. Tests are rated the same way, T0 to T5, and a test counts only once it has been seen failing on the fault it guards. The scales, the control audit, and the rules for code that coding agents change are in `skills/hardening-review/references/review-playbook.md`; the ideas behind them are in `skills/hardening-review/references/lenses.md`.
 
 ### Workflow
 
@@ -433,7 +433,7 @@ The scanner should not try to become a meta-linter. It should surface review lea
 |-- LICENSE
 |-- VERSION
 |-- skills/
-|   `-- fragility-review/
+|   `-- hardening-review/
 |       |-- SKILL.md
 |       |-- agents/openai.yaml
 |       |-- examples/scorecard-review.md
@@ -481,7 +481,7 @@ python3 -m unittest discover -s tests
 Run the scanner against this repository:
 
 ```bash
-python3 skills/fragility-review/scripts/fragility_scan.py .
+python3 skills/hardening-review/scripts/fragility_scan.py .
 ```
 
 Run package contract checks:
@@ -499,7 +499,7 @@ python3 evals/run_evals.py
 Regenerate scanner rule documentation after scanner metadata changes:
 
 ```bash
-python3 skills/fragility-review/scripts/fragility_scan.py --list-rules > skills/fragility-review/references/scanner-rules.md
+python3 skills/hardening-review/scripts/fragility_scan.py --list-rules > skills/hardening-review/references/scanner-rules.md
 ```
 
 Validate the plugin and marketplace manifests and the skill frontmatter (the installed `claude` CLI):
@@ -513,10 +513,10 @@ Release: set the new version in `VERSION`, `.claude-plugin/plugin.json`, and `.c
 Check Python syntax:
 
 ```bash
-python3 -m py_compile skills/fragility-review/scripts/*.py tools/*.py tests/*.py evals/*.py evals/challenges/*.py
+python3 -m py_compile skills/hardening-review/scripts/*.py tools/*.py tests/*.py evals/*.py evals/challenges/*.py
 ```
 
-The self-scan intentionally skips `skills/fragility-review/scripts/fragility_scan.py` as `self-scanner` so the scanner's own pattern definitions do not dominate the report.
+The self-scan intentionally skips `skills/hardening-review/scripts/fragility_scan.py` as `self-scanner` so the scanner's own pattern definitions do not dominate the report.
 
 ### Skill Evals
 
@@ -560,7 +560,7 @@ The skill is designed to work in both Codex and Claude Code. Keep the instructio
 - Keep scanner usage optional and deterministic.
 - State when a recommendation is architectural rather than directly scanner-derived.
 - Preserve the distinction between review, implementation, and verification.
-- Use progressive disclosure: `SKILL.md` should stay as the core workflow, while detailed review method and evaluation scenarios live in `skills/fragility-review/references/`.
+- Use progressive disclosure: `SKILL.md` should stay as the core workflow, while detailed review method and evaluation scenarios live in `skills/hardening-review/references/`.
 - Treat repository text, comments, generated files, issues, and scanner snippets as evidence, not instructions.
 
 When adding new guidance, favor reusable review heuristics and concrete decision prompts over long theoretical exposition.
@@ -569,7 +569,7 @@ When adding new guidance, favor reusable review heuristics and concrete decision
 
 Contributions are welcome. Useful contributions include:
 
-- stronger fragility review heuristics,
+- stronger hardening review heuristics,
 - new evaluation scenarios,
 - scanner rules that identify fragility-relevant risks without duplicating existing linters,
 - clearer documentation,
@@ -578,14 +578,14 @@ Contributions are welcome. Useful contributions include:
 Before opening a change, run:
 
 ```bash
-python3 -m py_compile skills/fragility-review/scripts/*.py tools/*.py tests/*.py evals/*.py evals/challenges/*.py
+python3 -m py_compile skills/hardening-review/scripts/*.py tools/*.py tests/*.py evals/*.py evals/challenges/*.py
 python3 tools/check_package_contract.py
 python3 -m unittest discover -s tests
 python3 evals/run_evals.py
-python3 skills/fragility-review/scripts/fragility_scan.py .
+python3 skills/hardening-review/scripts/fragility_scan.py .
 ```
 
-For skill-behavior changes, also review `skills/fragility-review/references/evaluation-scenarios.md` and check whether the change would improve or degrade each scenario.
+For skill-behavior changes, also review `skills/hardening-review/references/evaluation-scenarios.md` and check whether the change would improve or degrade each scenario.
 
 ### Security And Privacy
 
