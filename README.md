@@ -93,7 +93,7 @@ Remove it with:
 claude plugin uninstall fragility-review@pealco
 ```
 
-If you installed version 0.2.0 or earlier under the old name `antifragile-software-review`, `claude plugin update` cannot follow the rename. Remove the old name and install the new one:
+If you installed version 0.2.0 or earlier under the old name `antifragile-software-review`, `claude plugin update` cannot follow the rename: it removes the old record and downloads the new version without registering it. Install the new name (if the uninstall says the plugin is not found, skip it):
 
 ```bash
 claude plugin uninstall antifragile-software-review@pealco
