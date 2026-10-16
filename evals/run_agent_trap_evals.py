@@ -212,7 +212,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    ap.add_argument("--skill-dir", type=Path, default=out.ROOT)
+    ap.add_argument("--skill-dir", type=Path, default=out.SKILL_DIR)
     ap.add_argument("--configs", default="with_skill,without_skill")
     ap.add_argument(
         "--hardens", type=int, default=3, help="hardened repos per configuration"

@@ -10,13 +10,15 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
+SKILL_DIR = ROOT / "skills" / "antifragile-software-review"
 README = ROOT / "README.md"
-SKILL = ROOT / "SKILL.md"
+SKILL = SKILL_DIR / "SKILL.md"
 VERSION = ROOT / "VERSION"
-SCANNER = ROOT / "scripts" / "antifragile_scan.py"
-RULES = ROOT / "references" / "scanner-rules.md"
+PLUGIN = ROOT / ".claude-plugin" / "plugin.json"
+MARKETPLACE = ROOT / ".claude-plugin" / "marketplace.json"
+SCANNER = SKILL_DIR / "scripts" / "antifragile_scan.py"
+RULES = SKILL_DIR / "references" / "scanner-rules.md"
 WORKFLOW = ROOT / ".github" / "workflows" / "test.yml"
 
 REQUIRED_FRONTMATTER_FIELDS = {
@@ -62,7 +64,7 @@ def release_tag() -> str:
 
 
 def frontmatter_fields(text: str) -> dict[str, str]:
-    match = re.match(r"---\n(.*?)\n---\n", text, re.S)
+    match = re.match(r"---\n(.*?)\n---\n", text, re.DOTALL)
     if not match:
         fail("SKILL.md is missing YAML frontmatter")
 
@@ -85,7 +87,7 @@ def normalize_skill_reference(raw_reference: str) -> str | None:
     for prefix in LOCAL_REFERENCE_PREFIXES:
         if reference.startswith(prefix):
             return reference
-    if reference in {"README.md", "SKILL.md", "VERSION", "LICENSE"}:
+    if reference in {"SKILL.md", "LICENSE"}:
         return reference
     return None
 
@@ -118,7 +120,9 @@ def check_skill_frontmatter_and_references() -> None:
     }
 
     missing_paths = sorted(
-        reference for reference in local_references if not (ROOT / reference).exists()
+        reference
+        for reference in local_references
+        if not (SKILL_DIR / reference).exists()
     )
     if missing_paths:
         fail(f"SKILL.md references missing path(s): {', '.join(missing_paths)}")
@@ -127,6 +131,7 @@ def check_skill_frontmatter_and_references() -> None:
 def check_readme_release_pins(expected_tag: str) -> None:
     text = read_text(README)
     install_pins = re.findall(r"(?:--branch|checkout)\s+(v\d+\.\d+\.\d+)", text)
+    install_pins += re.findall(r"#(v\d+\.\d+\.\d+)", text)
     install_pins += re.findall(r"examples below pin `(v\d+\.\d+\.\d+)`", text)
 
     if not install_pins:
@@ -150,13 +155,14 @@ def check_generated_rule_catalog() -> None:
     if read_text(RULES) != result.stdout:
         fail(
             "references/scanner-rules.md is stale; regenerate it with "
-            "python3 scripts/antifragile_scan.py --list-rules > references/scanner-rules.md"
+            "python3 skills/antifragile-software-review/scripts/antifragile_scan.py --list-rules "
+            "> skills/antifragile-software-review/references/scanner-rules.md"
         )
 
 
 def check_claude_skill_dir_scanner_invocation() -> None:
     env = os.environ.copy()
-    env["CLAUDE_SKILL_DIR"] = str(ROOT)
+    env["CLAUDE_SKILL_DIR"] = str(SKILL_DIR)
     command = f'"{sys.executable}" "${{CLAUDE_SKILL_DIR}}/scripts/antifragile_scan.py" "$PWD" --json'
     result = subprocess.run(
         ["sh", "-c", command],
@@ -169,6 +175,29 @@ def check_claude_skill_dir_scanner_invocation() -> None:
     scan = json.loads(result.stdout)
     if not isinstance(scan.get("findings"), list):
         fail("scanner JSON from CLAUDE_SKILL_DIR invocation is missing findings")
+
+
+def check_plugin_manifests(version: str) -> None:
+    """plugin.json and marketplace.json carry the released version and point at the skill."""
+    plugin = json.loads(read_text(PLUGIN))
+    marketplace = json.loads(read_text(MARKETPLACE))
+    if plugin.get("name") != "antifragile-software-review":
+        fail(f"{PLUGIN} name must be antifragile-software-review")
+    if plugin.get("version") != version:
+        fail(f"{PLUGIN} version is {plugin.get('version')}; VERSION is {version}")
+    entries = [
+        e for e in marketplace.get("plugins", []) if e.get("name") == plugin["name"]
+    ]
+    if len(entries) != 1:
+        fail(f"{MARKETPLACE} must list exactly one plugin named {plugin['name']}")
+    if entries[0].get("version") != version:
+        fail(
+            f"{MARKETPLACE} plugin version is {entries[0].get('version')}; VERSION is {version}"
+        )
+    if entries[0].get("source") != "./":
+        fail(f"{MARKETPLACE} plugin source must be ./ (this repository is the plugin)")
+    if not (SKILL_DIR / "SKILL.md").is_file():
+        fail(f"{SKILL_DIR} must hold SKILL.md so the plugin discovers it under skills/")
 
 
 def check_github_action_pins() -> None:
@@ -190,6 +219,7 @@ def check_github_action_pins() -> None:
 
 def main() -> int:
     expected_tag = release_tag()
+    check_plugin_manifests(expected_tag.removeprefix("v"))
     check_skill_frontmatter_and_references()
     check_readme_release_pins(expected_tag)
     check_generated_rule_catalog()

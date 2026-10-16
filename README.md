@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/pealco/antifragile-software-review/actions/workflows/test.yml/badge.svg)](https://github.com/pealco/antifragile-software-review/actions/workflows/test.yml)
 
-A Codex and Claude Code skill for reviewing software through an antifragility lens: finding places where systems merely resist stress, and improving them so they learn from variation, failures, and changing constraints.
+A Claude Code plugin, and an Agent Skill for Codex and other clients, for reviewing software through an antifragility lens: finding places where systems merely resist stress, and improving them so they learn from variation, failures, and changing constraints.
 
 The goal is not to make code "perfect" or eliminate all failure. The goal is to help a codebase gain from small shocks, cheap experiments, fast reversals, rich feedback, and bounded downside.
 
@@ -35,18 +35,19 @@ What the evals show, as of October 2026: on three fixtures, Claude Opus 5.5 find
 
 This repository contains:
 
-- `SKILL.md`: the skill entrypoint for Codex and Claude Code.
-- `VERSION`: the released package version used by install docs and release checks.
-- `references/review-playbook.md`: the system-level review method for architecture, operations, release, data, dependency, testing, and incident-learning analysis.
-- `references/evaluation-scenarios.md`: representative behavior checks for keeping the skill architecture-first, evidence-driven, and resistant to scanner overfitting.
-- `references/scanner-rules.md`: generated scanner rule metadata for reviewing coverage, linter overlap, and exposure dimensions.
-- `scripts/antifragile_scan.py`: a dependency-free Python scanner that surfaces review leads across several languages, runtimes, and infrastructure files.
-- `scripts/check_package_contract.py`: a CI-enforced package consistency check for skill metadata, references, release pins, generated docs, and workflow pins.
-- `templates/review-scorecard.md`: a reusable scorecard for critical-flow traces, exposure scoring, and findings.
-- `examples/scorecard-review.md`: a compact example of the review scorecard filled out for a realistic service.
+- `skills/antifragile-software-review/`: the skill itself, laid out as an Agent Skill: `SKILL.md`, with `references/`, `scripts/`, `templates/`, and `examples/` beside it.
+- `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`: the Claude Code plugin manifest and the one-entry marketplace that makes this repository installable with `/plugin install`.
+- `VERSION`: the released version; the manifests and the install examples must agree with it, and the contract check enforces that.
+- `skills/antifragile-software-review/references/review-playbook.md`: the system-level review method for architecture, operations, release, data, dependency, testing, and incident-learning analysis.
+- `skills/antifragile-software-review/references/evaluation-scenarios.md`: representative behavior checks for keeping the skill architecture-first, evidence-driven, and resistant to scanner overfitting.
+- `skills/antifragile-software-review/references/scanner-rules.md`: generated scanner rule metadata for reviewing coverage, linter overlap, and exposure dimensions.
+- `skills/antifragile-software-review/scripts/antifragile_scan.py`: a dependency-free Python scanner that surfaces review leads across several languages, runtimes, and infrastructure files.
+- `tools/check_package_contract.py`: a CI-enforced consistency check for skill metadata, references, plugin manifests, release pins, generated docs, and workflow pins.
+- `skills/antifragile-software-review/templates/review-scorecard.md`: a reusable scorecard for critical-flow traces, exposure scoring, and findings.
+- `skills/antifragile-software-review/examples/scorecard-review.md`: a compact example of the review scorecard filled out for a realistic service.
 - `evals/`: scanner-and-golden-file checks that run in CI, plus model-in-the-loop evals for triggering and review quality (see Skill Evals).
-- `scripts/check_review_evidence.py`: checks that every file and line a review cites on an `Evidence:` line exists. `SKILL.md` tells the agent to run it before it sends a review.
-- `scripts/check_test_strength.py`: stubs each function out (`return None`, then `return True`) and reruns the test suite; a function whose stub the suite tolerates has no test that depends on its logic. The scanner's `test-*` rules flag the static shapes of a test that cannot fail: an expected value computed by the code under test, loose or call-only assertions, no assertion at all, fixed sleeps, swallowed exceptions, and skips without a reason.
+- `skills/antifragile-software-review/scripts/check_review_evidence.py`: checks that every file and line a review cites on an `Evidence:` line exists. `SKILL.md` tells the agent to run it before it sends a review.
+- `skills/antifragile-software-review/scripts/check_test_strength.py`: stubs each function out (`return None`, then `return True`) and reruns the test suite; a function whose stub the suite tolerates has no test that depends on its logic. The scanner's `test-*` rules flag the static shapes of a test that cannot fail: an expected value computed by the code under test, loose or call-only assertions, no assertion at all, fixed sleeps, swallowed exceptions, and skips without a reason.
 - `docs/mistake-proofing-research.md`: the research behind the mistake-proofing method (poka-yoke, safety science, software practice, coding agents), the control strength scale, and how the method is measured.
 - `evals/challenges/`: challenge tests that feed a known-bad case to a repository after an agent changed it and check that the mistake no longer gets through; `evals/run_agent_trap_evals.py` runs later coding agents against hardened repositories, with tasks from `evals/agent_traps*.json`, and reports whether their changes reopen the mistake.
 
@@ -54,128 +55,104 @@ The scanner is deliberately secondary. It helps discover concrete code smells an
 
 ## Install
 
-For reproducible installs, prefer the latest release tag. The examples below pin `v0.1.1`. Clone from `main` only when you intentionally want unreleased changes.
+This repository is a Claude Code plugin and its own marketplace. The skill inside it follows the Agent Skills layout (`skills/antifragile-software-review/SKILL.md`, with `scripts/`, `references/`, and `templates/` beside it), so it also installs as a plain skill in Claude Code, Codex, or any client that reads `SKILL.md`. The examples below pin `v0.2.0`. Install from `main` only when you want unreleased changes.
 
-### Claude Code
+### Claude Code plugin
 
-Claude Code discovers skills from `~/.claude/skills` for personal skills and `.claude/skills` for project-local skills. This repository can be installed either way.
+One step, in a session (Claude Code 2.1.275 or later):
 
-Install the stable release as a personal Claude Code skill:
+```text
+/plugin install antifragile-software-review --marketplace pealco/antifragile-software-review
+```
+
+Or add the marketplace first, pinned to a release, then install:
+
+```text
+/plugin marketplace add pealco/antifragile-software-review#v0.2.0
+/plugin install antifragile-software-review@pealco
+```
+
+From a shell:
+
+```bash
+claude plugin install antifragile-software-review --marketplace pealco/antifragile-software-review --scope user
+```
+
+The skill triggers on its own when a request matches its description. Invoke it by hand with `/antifragile-software-review:antifragile-software-review`. Third-party marketplaces do not auto-update, so update with:
+
+```bash
+claude plugin update antifragile-software-review@pealco
+```
+
+Remove it with:
+
+```bash
+claude plugin uninstall antifragile-software-review@pealco
+```
+
+Try it for one session without installing:
+
+```bash
+git clone https://github.com/pealco/antifragile-software-review.git
+claude --plugin-dir ./antifragile-software-review
+```
+
+### Claude Code skill directory
+
+Without the plugin system, clone the repository into the personal skills directory. Claude Code loads a folder there that carries `.claude-plugin/plugin.json` as a plugin named `antifragile-software-review@skills-dir` and finds the skill under `skills/`:
 
 ```bash
 mkdir -p ~/.claude/skills
-git clone --branch v0.1.1 https://github.com/pealco/antifragile-software-review.git \
+git clone --branch v0.2.0 https://github.com/pealco/antifragile-software-review.git \
   ~/.claude/skills/antifragile-software-review
 ```
 
-Track `main` instead when you want unreleased changes:
+Update it with `git -C ~/.claude/skills/antifragile-software-review pull --ff-only`, switch releases with `git -C ~/.claude/skills/antifragile-software-review checkout v0.2.0` after a `fetch --tags`, and uninstall by deleting the directory. Restart Claude Code after installing so the skill index refreshes.
+
+For a project-local install, add the repository as a submodule anywhere in the project and link the skill folder into `.claude/skills`:
 
 ```bash
-git clone https://github.com/pealco/antifragile-software-review.git \
-  ~/.claude/skills/antifragile-software-review
-```
-
-Restart Claude Code after installation so the skill index refreshes.
-
-Use it naturally:
-
-```text
-Review this repository through an antifragility lens.
-Find fragility risks in this design and suggest improvements.
-Use antifragile-software-review to audit this service.
-```
-
-Or invoke it explicitly:
-
-```text
-Use the antifragile-software-review skill to review this codebase.
-```
-
-Install it as a project-scoped Claude Code skill when you want the review workflow versioned with a repository:
-
-```bash
+git submodule add --branch v0.2.0 https://github.com/pealco/antifragile-software-review.git \
+  vendor/antifragile-software-review
 mkdir -p .claude/skills
-git submodule add --branch v0.1.1 https://github.com/pealco/antifragile-software-review.git \
+ln -s ../../vendor/antifragile-software-review/skills/antifragile-software-review \
   .claude/skills/antifragile-software-review
 ```
 
-Claude Code exposes the skill directory through `${CLAUDE_SKILL_DIR}`, so scanner examples in `SKILL.md` work without hard-coded absolute paths.
-
-Update the Claude Code skill:
-
-```bash
-git -C ~/.claude/skills/antifragile-software-review pull --ff-only
-```
-
-Switch an installed Claude Code skill to a release tag:
-
-```bash
-git -C ~/.claude/skills/antifragile-software-review fetch --tags
-git -C ~/.claude/skills/antifragile-software-review checkout v0.1.1
-```
-
-Uninstall the personal Claude Code skill:
-
-```bash
-rm -rf ~/.claude/skills/antifragile-software-review
-```
+Claude Code exposes the skill directory through `${CLAUDE_SKILL_DIR}`, so the scanner commands in `SKILL.md` work without hard-coded paths.
 
 ### Codex
 
-Requirements:
+Requirements: Codex CLI with local skill support, Git, and Python 3.10 or newer to run the scripts.
 
-- Codex CLI with local skill support.
-- Python 3.10 or newer if you want to run the scanner directly.
-- Git for installing and updating from GitHub.
-
-Install the stable release as a Codex skill:
+Codex reads `~/.codex/skills/<name>/SKILL.md`, so link the skill folder there:
 
 ```bash
+git clone --branch v0.2.0 https://github.com/pealco/antifragile-software-review.git \
+  ~/src/antifragile-software-review
 mkdir -p ~/.codex/skills
-git clone --branch v0.1.1 https://github.com/pealco/antifragile-software-review.git \
+ln -s ~/src/antifragile-software-review/skills/antifragile-software-review \
   ~/.codex/skills/antifragile-software-review
 ```
 
-Track `main` instead when you want unreleased changes:
+Restart Codex after installing so the skill registry reloads. Update with `git -C ~/src/antifragile-software-review pull --ff-only`; switch releases with `git -C ~/src/antifragile-software-review checkout v0.2.0` after a `fetch --tags`; uninstall by removing the link and the clone.
 
-```bash
-git clone https://github.com/pealco/antifragile-software-review.git \
-  ~/.codex/skills/antifragile-software-review
-```
-
-Restart Codex after installing so the skill registry reloads.
-
-Use it naturally:
-
-```text
-Review this repository through an antifragility lens.
-Find fragility risks in this design and suggest improvements.
-Use antifragile-software-review to audit this service.
-```
-
-Or invoke it explicitly:
+Invoke it explicitly:
 
 ```text
 [$antifragile-software-review] Review this repo for fragility risks.
 ```
 
-Update the Codex skill:
+### Other clients
 
-```bash
-git -C ~/.codex/skills/antifragile-software-review pull --ff-only
-```
+Copy or link `skills/antifragile-software-review` wherever your client reads Agent Skills. The frontmatter uses one Claude Code-only key, `argument-hint`; clients that reject unknown keys (claude.ai skill uploads do) need it removed.
 
-Switch an installed Codex skill to a release tag:
+Use it naturally in any client:
 
-```bash
-git -C ~/.codex/skills/antifragile-software-review fetch --tags
-git -C ~/.codex/skills/antifragile-software-review checkout v0.1.1
-```
-
-Uninstall the Codex skill:
-
-```bash
-rm -rf ~/.codex/skills/antifragile-software-review
+```text
+Review this repository through an antifragility lens.
+Find fragility risks in this design and suggest improvements.
+Use antifragile-software-review to audit this service.
 ```
 
 ## Use
@@ -215,41 +192,41 @@ In implementation mode, each control the skill adds comes with a challenge test:
 The scanner can be run as a standalone Python script. Use it as a discovery tool after you have a rough system map, or as a quick source of review leads when you are exploring unfamiliar code.
 
 ```bash
-python3 scripts/antifragile_scan.py .
+python3 skills/antifragile-software-review/scripts/antifragile_scan.py .
 ```
 
 Emit JSON for automation:
 
 ```bash
-python3 scripts/antifragile_scan.py . --json
+python3 skills/antifragile-software-review/scripts/antifragile_scan.py . --json
 ```
 
 Scan specific paths:
 
 ```bash
-python3 scripts/antifragile_scan.py src tests config
+python3 skills/antifragile-software-review/scripts/antifragile_scan.py src tests config
 ```
 
 Exclude paths:
 
 ```bash
-python3 scripts/antifragile_scan.py . --exclude vendor --exclude build
+python3 skills/antifragile-software-review/scripts/antifragile_scan.py . --exclude vendor --exclude build
 ```
 
 Limit findings per rule:
 
 ```bash
-python3 scripts/antifragile_scan.py . --max-per-pattern 20 --max-file-bytes 2000000
+python3 skills/antifragile-software-review/scripts/antifragile_scan.py . --max-per-pattern 20 --max-file-bytes 2000000
 ```
 
 List rule metadata, including rule ids, categories, linter overlaps, and exposure dimensions:
 
 ```bash
-python3 scripts/antifragile_scan.py --list-rules
-python3 scripts/antifragile_scan.py --list-rules --json
+python3 skills/antifragile-software-review/scripts/antifragile_scan.py --list-rules
+python3 skills/antifragile-software-review/scripts/antifragile_scan.py --list-rules --json
 ```
 
-The generated Markdown catalog is committed at `references/scanner-rules.md`.
+The generated Markdown catalog is committed at `skills/antifragile-software-review/references/scanner-rules.md`.
 
 ### Suppress Reviewed Signals
 
@@ -289,7 +266,7 @@ Every recommendation should say whether it is robust, resilient, or antifragile.
 
 The skill now makes that distinction more concrete by tracing a high-exposure critical flow, classifying the stress response curve, scoring fragility exposure, and naming missing evidence instead of assuming it away.
 
-The review also treats every developer, operator, and coding agent as an actor who will make mistakes. For each step of the traced flow it rates the strongest control that stops a mistake, from documentation (C1) to a design that makes the mistake impossible (C5), credits a control only when a challenge test proves it, and sets the required strength from how reversible the harm is. The scale, the control audit, and the rules for code that coding agents change are in `references/review-playbook.md` under Control Strength.
+The review also treats every developer, operator, and coding agent as an actor who will make mistakes. For each step of the traced flow it rates the strongest control that stops a mistake, from documentation (C1) to a design that makes the mistake impossible (C5), credits a control only when a challenge test proves it, and sets the required strength from how reversible the harm is. The scale, the control audit, and the rules for code that coding agents change are in `skills/antifragile-software-review/references/review-playbook.md` under Control Strength.
 
 ### Antifragility Analysis Workflow
 
@@ -440,12 +417,27 @@ The scanner should not try to become a meta-linter. It should surface review lea
 
 ```text
 .
-|-- SKILL.md
+|-- .claude-plugin/
+|   |-- marketplace.json
+|   `-- plugin.json
 |-- README.md
 |-- LICENSE
 |-- VERSION
-|-- agents/
-|   `-- openai.yaml
+|-- skills/
+|   `-- antifragile-software-review/
+|       |-- SKILL.md
+|       |-- agents/openai.yaml
+|       |-- examples/scorecard-review.md
+|       |-- references/
+|       |   |-- antifragility-primer.md
+|       |   |-- evaluation-scenarios.md
+|       |   |-- review-playbook.md
+|       |   `-- scanner-rules.md
+|       |-- scripts/
+|       |   |-- antifragile_scan.py
+|       |   |-- check_review_evidence.py
+|       |   `-- check_test_strength.py
+|       `-- templates/review-scorecard.md
 |-- docs/
 |   `-- mistake-proofing-research.md
 |-- evals/
@@ -461,22 +453,11 @@ The scanner should not try to become a meta-linter. It should surface review lea
 |   |-- run_output_evals.py
 |   |-- run_trigger_evals.py
 |   `-- trigger_queries.json
-|-- examples/
-|   `-- scorecard-review.md
 |-- .github/
 |   `-- workflows/
 |       `-- test.yml
-|-- references/
-|   |-- antifragility-primer.md
-|   |-- evaluation-scenarios.md
-|   |-- review-playbook.md
-|   `-- scanner-rules.md
-|-- scripts/
-|   |-- antifragile_scan.py
-|   |-- check_package_contract.py
-|   `-- check_review_evidence.py
-|-- templates/
-|   `-- review-scorecard.md
+|-- tools/
+|   `-- check_package_contract.py
 `-- tests/
 ```
 
@@ -491,13 +472,13 @@ python3 -m unittest discover -s tests
 Run the scanner against this repository:
 
 ```bash
-python3 scripts/antifragile_scan.py .
+python3 skills/antifragile-software-review/scripts/antifragile_scan.py .
 ```
 
 Run package contract checks:
 
 ```bash
-python3 scripts/check_package_contract.py
+python3 tools/check_package_contract.py
 ```
 
 Run the scanner-and-golden-file fixture checks (no model, runs in CI):
@@ -509,16 +490,24 @@ python3 evals/run_evals.py
 Regenerate scanner rule documentation after scanner metadata changes:
 
 ```bash
-python3 scripts/antifragile_scan.py --list-rules > references/scanner-rules.md
+python3 skills/antifragile-software-review/scripts/antifragile_scan.py --list-rules > skills/antifragile-software-review/references/scanner-rules.md
 ```
+
+Validate the plugin and marketplace manifests and the skill frontmatter (the installed `claude` CLI):
+
+```bash
+claude plugin validate --strict .
+```
+
+Release: set the new version in `VERSION`, `.claude-plugin/plugin.json`, and `.claude-plugin/marketplace.json`, update the pinned version in this README, run the contract check, then tag and push `vX.Y.Z`. Installed plugins pick the new version up on `claude plugin update`.
 
 Check Python syntax:
 
 ```bash
-python3 -m py_compile scripts/*.py tests/*.py evals/*.py evals/challenges/*.py
+python3 -m py_compile skills/antifragile-software-review/scripts/*.py tools/*.py tests/*.py evals/*.py evals/challenges/*.py
 ```
 
-The self-scan intentionally skips `scripts/antifragile_scan.py` as `self-scanner` so the scanner's own pattern definitions do not dominate the report.
+The self-scan intentionally skips `skills/antifragile-software-review/scripts/antifragile_scan.py` as `self-scanner` so the scanner's own pattern definitions do not dominate the report.
 
 ### Skill Evals
 
@@ -542,7 +531,7 @@ python3 evals/run_output_evals.py --configs with_skill --runs 3 --skill-dir /pat
 
 Hardening. Implementation cases in `evals/evals.json` can list `challenge:<name>` checks. A challenge (`evals/challenges/`) runs the fixture's real entrypoint with stubbed services against a known-bad case and checks that the mistake no longer gets through; each also keeps a known-good case passing, so a patch that stops all work does not pass. The unit tests in `tests/test_*challenges.py` prove that each challenge rejects the unfixed fixture and accepts a reference fix.
 
-Test quality. Implementation cases can also grade the tests an agent leaves behind rather than its code. `tests_changed` and `fails_on_original` require new tests that fail on the untouched fixture; `protected:<file>:<function>` runs `scripts/check_test_strength.py` and requires a test that depends on that function; `mutant:<name>` applies a seeded fault from `evals/mutants/<fixture>.json` to the repository as the agent left it and passes only if the suite fails (when the agent rewrote the seeded line, the fault is applied to a reference implementation in `evals/mutants/<fixture>/` instead, if the agent's suite accepts it); `refusals_tested` replaces every `raise` in the code with `pass` and passes only if the suite fails, so a refusal is tested whatever shape the agent gave it. The fixtures `backup-retention` and `doc-sharing` ship with suites that pass on wrong code; `tests/test_*_mutants.py` prove that each weak suite tolerates every seeded fault and that a literal-valued test rejects them. `--regrade-checks` recomputes these checks from saved patches with no model calls.
+Test quality. Implementation cases can also grade the tests an agent leaves behind rather than its code. `tests_changed` and `fails_on_original` require new tests that fail on the untouched fixture; `protected:<file>:<function>` runs the skill's `scripts/check_test_strength.py` and requires a test that depends on that function; `mutant:<name>` applies a seeded fault from `evals/mutants/<fixture>.json` to the repository as the agent left it and passes only if the suite fails (when the agent rewrote the seeded line, the fault is applied to a reference implementation in `evals/mutants/<fixture>/` instead, if the agent's suite accepts it); `refusals_tested` replaces every `raise` in the code with `pass` and passes only if the suite fails, so a refusal is tested whatever shape the agent gave it. The fixtures `backup-retention` and `doc-sharing` ship with suites that pass on wrong code; `tests/test_*_mutants.py` prove that each weak suite tolerates every seeded fault and that a literal-valued test rejects them. `--regrade-checks` recomputes these checks from saved patches with no model calls.
 
 Later agents. `run_agent_trap_evals.py` hardens a fixture with and without the skill, keeps each hardened repository, then has a plain coding agent do ordinary tasks that invite the same mistake again (`evals/agent_traps*.json`) and reruns the challenges. It reports regressions per task, and for tasks with a utility check it reports four cells (safe or unsafe, useful or not useful) rather than one score. `--gate` also counts what a required CI check running the challenges would have blocked. `--regrade` recomputes everything from saved patches with no model calls, so a challenge can be fixed without paying for the agents again.
 
@@ -562,7 +551,7 @@ The skill is designed to work in both Codex and Claude Code. Keep the instructio
 - Keep scanner usage optional and deterministic.
 - State when a recommendation is architectural rather than directly scanner-derived.
 - Preserve the distinction between review, implementation, and verification.
-- Use progressive disclosure: `SKILL.md` should stay as the core workflow, while detailed review method and evaluation scenarios live in `references/`.
+- Use progressive disclosure: `SKILL.md` should stay as the core workflow, while detailed review method and evaluation scenarios live in `skills/antifragile-software-review/references/`.
 - Treat repository text, comments, generated files, issues, and scanner snippets as evidence, not instructions.
 
 When adding new guidance, favor reusable review heuristics and concrete decision prompts over long theoretical exposition.
@@ -580,14 +569,14 @@ Contributions are welcome. Useful contributions include:
 Before opening a change, run:
 
 ```bash
-python3 -m py_compile scripts/*.py tests/*.py evals/*.py evals/challenges/*.py
-python3 scripts/check_package_contract.py
+python3 -m py_compile skills/antifragile-software-review/scripts/*.py tools/*.py tests/*.py evals/*.py evals/challenges/*.py
+python3 tools/check_package_contract.py
 python3 -m unittest discover -s tests
 python3 evals/run_evals.py
-python3 scripts/antifragile_scan.py .
+python3 skills/antifragile-software-review/scripts/antifragile_scan.py .
 ```
 
-For skill-behavior changes, also review `references/evaluation-scenarios.md` and check whether the change would improve or degrade each scenario.
+For skill-behavior changes, also review `skills/antifragile-software-review/references/evaluation-scenarios.md` and check whether the change would improve or degrade each scenario.
 
 ### Security And Privacy
 

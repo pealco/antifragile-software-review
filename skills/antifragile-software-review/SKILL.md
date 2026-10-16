@@ -2,6 +2,7 @@
 name: antifragile-software-review
 description: Use when the user wants to find, rank, or reduce what would hurt a software system under stress, even if they never say antifragile. Covers irreversible or hard-to-undo operations (data migrations, bulk updates, deploys), single points of failure, missing rollback or feedback loops, outages or incidents that never become tests or alerts, dependency and vendor lock-in decisions, and applying Taleb's antifragility ideas to a codebase or architecture. Reviews the repository, traces one critical flow, scores exposure, then either reports findings (for audit wording such as review or assess) or patches the highest-risk reversible issue (for action wording such as harden, fix, or make). Takes a repo path or focus. Not for line-level bug review, security audits, performance tuning, or narrow feature work.
 argument-hint: "[repo-path or focus]"
+license: MIT
 compatibility: Requires Python 3.10+ for the bundled scripts. Needs no network access.
 allowed-tools: Bash(python3 *skills/antifragile-software-review/scripts/antifragile_scan.py*) Bash(python3 *skills/antifragile-software-review/scripts/check_review_evidence.py*) Bash(python3 *skills/antifragile-software-review/scripts/check_test_strength.py*)
 ---

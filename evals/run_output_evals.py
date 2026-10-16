@@ -29,13 +29,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+SKILL_DIR = ROOT / "skills" / "antifragile-software-review"
 CASES = ROOT / "evals" / "evals.json"
 FIXTURES = ROOT / "evals" / "fixtures"
 GOLDEN = ROOT / "evals" / "golden"
-EVIDENCE_CHECKER = ROOT / "scripts" / "check_review_evidence.py"
+EVIDENCE_CHECKER = SKILL_DIR / "scripts" / "check_review_evidence.py"
 CHALLENGES = ROOT / "evals" / "challenges"
 MUTANTS = ROOT / "evals" / "mutants"
-STRENGTH_CHECKER = ROOT / "scripts" / "check_test_strength.py"
+STRENGTH_CHECKER = SKILL_DIR / "scripts" / "check_test_strength.py"
 DEFAULT_TEST_COMMAND = "python3 -m unittest discover -s tests"
 RUN_TIMEOUT_S = 900
 MAX_TURNS = 40
@@ -94,10 +95,7 @@ def make_project(case: dict, skill_dir: Path | None, skill_name: str) -> Path:
         shutil.copytree(
             skill_dir,
             project / ".claude" / "skills" / skill_name,
-            # evals/ and docs/ hold assertions and worked answers the agent must not read
-            ignore=shutil.ignore_patterns(
-                ".git", "__pycache__", "evals", "tests", "docs"
-            ),
+            ignore=shutil.ignore_patterns(".git", "__pycache__"),
         )
     return project
 
@@ -601,7 +599,7 @@ def regrade_checks(results_dir: Path, cases: dict[str, dict]) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--skill-dir", type=Path, default=ROOT)
+    ap.add_argument("--skill-dir", type=Path, default=SKILL_DIR)
     ap.add_argument("--only", help="comma-separated eval ids")
     ap.add_argument("--runs", type=int, default=1)
     ap.add_argument("--model", default="sonnet", help="model that does the task")

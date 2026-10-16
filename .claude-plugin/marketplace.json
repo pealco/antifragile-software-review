@@ -1,0 +1,18 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "pealco",
+  "description": "Skills by Pedro Alcocer.",
+  "owner": {
+    "name": "Pedro Alcocer",
+    "url": "https://github.com/pealco"
+  },
+  "plugins": [
+    {
+      "name": "antifragile-software-review",
+      "description": "Architecture-level review for software that must survive stress: traces one critical flow, rates every control that stops a human or coding-agent mistake, scores exposure, and either reports findings or patches the highest-risk reversible issue. Bundles a dependency-free scanner, an evidence checker, and a test-strength checker.",
+      "version": "0.2.0",
+      "category": "code-review",
+      "source": "./"
+    }
+  ]
+}

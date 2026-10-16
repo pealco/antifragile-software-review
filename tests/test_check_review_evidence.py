@@ -6,9 +6,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
-CHECKER = ROOT / "scripts" / "check_review_evidence.py"
+CHECKER = (
+    ROOT
+    / "skills"
+    / "antifragile-software-review"
+    / "scripts"
+    / "check_review_evidence.py"
+)
 
 
 def check(review: str, repo_files: dict[str, str]) -> subprocess.CompletedProcess[str]:
@@ -97,9 +102,7 @@ class ReviewEvidenceTest(unittest.TestCase):
         import sys
         import tempfile
 
-        checker = (
-            Path(__file__).resolve().parents[1] / "scripts" / "check_review_evidence.py"
-        )
+        checker = CHECKER
         review = (
             "The retry lives in `app/billing.py:2` and the gap in `app/missing.py`.\n"
         )

@@ -7,15 +7,20 @@ import sys
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class SkillEvaluationScenarioTest(unittest.TestCase):
     def test_scenario_blocks_parse_and_are_numbered(self) -> None:
-        text = (ROOT / "references" / "evaluation-scenarios.md").read_text(encoding="utf-8")
-        blocks = re.findall(r"```json\n(.*?)\n```", text, re.S)
-        headings = re.findall(r"^## Scenario (\d+):", text, re.M)
+        text = (
+            ROOT
+            / "skills"
+            / "antifragile-software-review"
+            / "references"
+            / "evaluation-scenarios.md"
+        ).read_text(encoding="utf-8")
+        blocks = re.findall(r"```json\n(.*?)\n```", text, re.DOTALL)
+        headings = re.findall(r"^## Scenario (\d+):", text, re.MULTILINE)
 
         self.assertEqual(8, len(blocks))
         self.assertEqual([str(index) for index in range(1, 9)], headings)
@@ -41,7 +46,13 @@ class SkillEvaluationScenarioTest(unittest.TestCase):
                 sys.executable,
                 str(ROOT / "evals" / "run_evals.py"),
                 "--review-output",
-                str(ROOT / "templates" / "review-scorecard.md"),
+                str(
+                    ROOT
+                    / "skills"
+                    / "antifragile-software-review"
+                    / "templates"
+                    / "review-scorecard.md"
+                ),
             ],
             check=True,
             capture_output=True,

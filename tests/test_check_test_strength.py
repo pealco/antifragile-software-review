@@ -9,7 +9,13 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CHECKER = ROOT / "scripts" / "check_test_strength.py"
+CHECKER = (
+    ROOT
+    / "skills"
+    / "antifragile-software-review"
+    / "scripts"
+    / "check_test_strength.py"
+)
 
 # `tax` has a real test; `discount` has a tautological one (expected computed by the subject);
 # `label` has a test that only checks the result is not None; `noop` is trivial and skipped.

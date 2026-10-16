@@ -7,9 +7,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
-SCANNER = ROOT / "scripts" / "antifragile_scan.py"
+SCANNER = (
+    ROOT / "skills" / "antifragile-software-review" / "scripts" / "antifragile_scan.py"
+)
 
 
 def write_file(root: Path, relative_path: str, text: str) -> None:
@@ -72,7 +73,9 @@ class AntifragileScanTest(unittest.TestCase):
 
         self.assertGreater(rules["rule_count"], 30)
         self.assertIn("python-http-without-timeout", rules_by_id)
-        self.assertEqual(["ruff:S113"], rules_by_id["python-http-without-timeout"]["linter_overlaps"])
+        self.assertEqual(
+            ["ruff:S113"], rules_by_id["python-http-without-timeout"]["linter_overlaps"]
+        )
         self.assertEqual(
             ["blast_radius", "dependency_concentration", "feedback_delay"],
             rules_by_id["python-http-without-timeout"]["exposure_dimensions"],
@@ -94,7 +97,9 @@ try:
 except Exception: pass
 """,
             )
-            write_file(root, "README.md", "This should never happen in normal operation.\n")
+            write_file(
+                root, "README.md", "This should never happen in normal operation.\n"
+            )
 
             scan = run_scan(root)
 
@@ -102,7 +107,9 @@ except Exception: pass
         self.assertEqual("silent-exception", scan["findings"][0]["pattern_id"])
         self.assertEqual("code", scan["findings"][0]["source_kind"])
         self.assertEqual("python", scan["findings"][0]["language"])
-        self.assertEqual(["ruff:BLE001", "ruff:S110"], scan["findings"][0]["linter_overlaps"])
+        self.assertEqual(
+            ["ruff:BLE001", "ruff:S110"], scan["findings"][0]["linter_overlaps"]
+        )
         self.assertEqual(["feedback_delay"], scan["findings"][0]["exposure_dimensions"])
         self.assertIn("lost learning", scan["findings"][0]["scanner_value"])
 
@@ -129,7 +136,9 @@ except ValueError:
 
         found = [(f["line"], f["pattern_id"]) for f in scan["findings"]]
         self.assertEqual([(4, "silent-exception")], found)
-        self.assertEqual(["ruff:BLE001", "ruff:S110"], scan["findings"][0]["linter_overlaps"])
+        self.assertEqual(
+            ["ruff:BLE001", "ruff:S110"], scan["findings"][0]["linter_overlaps"]
+        )
 
     def test_flags_tests_that_cannot_fail(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -174,7 +183,9 @@ class MoneyTest(unittest.TestCase):
         self.assertEqual(5, tax(100, 500))
 """,
             )
-            write_file(root, "app/money.py", "def tax(c, b):\n    return c * b // 10_000\n")
+            write_file(
+                root, "app/money.py", "def tax(c, b):\n    return c * b // 10_000\n"
+            )
 
             scan = run_scan(root)
 
@@ -187,7 +198,9 @@ class MoneyTest(unittest.TestCase):
         self.assertEqual([18], by_pattern["test-sleep"])
         self.assertEqual([24], by_pattern["test-swallowed-exception"])
         self.assertEqual([27], by_pattern["test-skipped-without-reason"])
-        self.assertEqual([21, 31], by_pattern["test-without-assertion"])  # the swallowing test asserts nothing either
+        self.assertEqual(
+            [21, 31], by_pattern["test-without-assertion"]
+        )  # the swallowing test asserts nothing either
 
     def test_inline_suppression_can_ignore_one_pattern_or_a_whole_line(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -212,8 +225,12 @@ while True:  # antifragile-scan: ignore
     def test_presence_terms_include_source_provenance_and_locations(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            write_file(root, "docs/runbook.md", "Rollback playbook for deploy recovery.\n")
-            write_file(root, ".github/workflows/deploy.yml", "name: canary deploy\non: push\n")
+            write_file(
+                root, "docs/runbook.md", "Rollback playbook for deploy recovery.\n"
+            )
+            write_file(
+                root, ".github/workflows/deploy.yml", "name: canary deploy\non: push\n"
+            )
             write_file(root, "app.py", 'trace_id = "abc123"\n')
 
             scan = run_scan(root)
@@ -222,8 +239,12 @@ while True:  # antifragile-scan: ignore
         self.assertEqual(1, signals["term_counts_by_source"]["rollback"]["docs"])
         self.assertEqual(1, signals["term_counts_by_source"]["canary"]["config"])
         self.assertEqual(1, signals["term_counts_by_source"]["observability"]["code"])
-        self.assertEqual("docs/runbook.md", signals["term_locations"]["rollback"][0]["path"])
-        self.assertEqual("docs", signals["term_locations"]["rollback"][0]["source_kind"])
+        self.assertEqual(
+            "docs/runbook.md", signals["term_locations"]["rollback"][0]["path"]
+        )
+        self.assertEqual(
+            "docs", signals["term_locations"]["rollback"][0]["source_kind"]
+        )
 
     def test_exclude_glob_skips_matching_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -233,7 +254,9 @@ while True:  # antifragile-scan: ignore
             scan = run_scan(root, "--exclude", "bad.py")
 
         self.assertEqual([], scan["findings"])
-        self.assertEqual([{"path": "bad.py", "reason": "excluded:bad.py"}], scan["skipped_files"])
+        self.assertEqual(
+            [{"path": "bad.py", "reason": "excluded:bad.py"}], scan["skipped_files"]
+        )
 
     def test_default_skips_fixture_directories_but_can_scan_fixture_roots(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -244,21 +267,34 @@ while True:  # antifragile-scan: ignore
             scan_fixture = run_scan(root / "fixtures")
 
         self.assertEqual([], scan_root["findings"])
-        self.assertEqual(["unbounded-loop"], [finding["pattern_id"] for finding in scan_fixture["findings"]])
+        self.assertEqual(
+            ["unbounded-loop"],
+            [finding["pattern_id"] for finding in scan_fixture["findings"]],
+        )
 
     def test_self_scan_skips_the_scanner_implementation(self) -> None:
         scan = run_scan(ROOT)
 
         self.assertIn(
-            {"path": "scripts/antifragile_scan.py", "reason": "self-scanner"},
+            {
+                "path": "skills/antifragile-software-review/scripts/antifragile_scan.py",
+                "reason": "self-scanner",
+            },
             scan["skipped_files"],
         )
-        self.assertNotIn("scripts/antifragile_scan.py", {finding["path"] for finding in scan["findings"]})
+        self.assertNotIn(
+            "skills/antifragile-software-review/scripts/antifragile_scan.py",
+            {finding["path"] for finding in scan["findings"]},
+        )
 
     def test_reports_skipped_files_that_reduce_scan_coverage(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            write_file(root, "large.py", "print('large file with enough bytes to cross the test cap')\n")
+            write_file(
+                root,
+                "large.py",
+                "print('large file with enough bytes to cross the test cap')\n",
+            )
             write_bytes(root, "binary.py", b"x\0\n")
             try:
                 (root / "broken.py").symlink_to("missing.py")
@@ -286,7 +322,9 @@ while True:  # antifragile-scan: ignore
             scan = run_scan(root, "--max-per-pattern", "2")
             report = run_scan_text(root, "--max-per-pattern", "2")
 
-        self.assertEqual(["a.py", "b.py"], [finding["path"] for finding in scan["findings"]])
+        self.assertEqual(
+            ["a.py", "b.py"], [finding["path"] for finding in scan["findings"]]
+        )
         self.assertEqual({"silent-exception": 1}, scan["finding_overflow"])
         self.assertIn("## Capped Finding Overflow", report)
         self.assertIn("`silent-exception`: 1 additional matches omitted", report)
@@ -312,11 +350,16 @@ requests.get("https://example.com")
             scan = run_scan(root)
             report = run_scan_text(root)
 
-        overlaps_by_pattern = {finding["pattern_id"]: finding["linter_overlaps"] for finding in scan["findings"]}
+        overlaps_by_pattern = {
+            finding["pattern_id"]: finding["linter_overlaps"]
+            for finding in scan["findings"]
+        }
         self.assertEqual(["ruff:E722"], overlaps_by_pattern["bare-except"])
         self.assertEqual(["ruff:PLW0603"], overlaps_by_pattern["global-state"])
         self.assertEqual(["ruff:T201"], overlaps_by_pattern["debug-print"])
-        self.assertEqual(["ruff:S113"], overlaps_by_pattern["python-http-without-timeout"])
+        self.assertEqual(
+            ["ruff:S113"], overlaps_by_pattern["python-http-without-timeout"]
+        )
         self.assertIn("Linter overlap: ruff:E722", report)
         self.assertIn("Exposure dimensions:", report)
         self.assertIn("Scanner value:", report)
@@ -364,21 +407,42 @@ SELECT pg_sleep(10);
         self.assertEqual(1, signals["language_file_counts"]["typescript"])
         self.assertEqual(1, signals["language_file_counts"]["sql"])
 
-        findings_by_pattern = {finding["pattern_id"]: finding for finding in scan["findings"]}
+        findings_by_pattern = {
+            finding["pattern_id"]: finding for finding in scan["findings"]
+        }
         self.assertEqual("rust", findings_by_pattern["rust-unwrap-expect"]["language"])
-        self.assertEqual(["clippy:unwrap_used"], findings_by_pattern["rust-unwrap-expect"]["linter_overlaps"])
+        self.assertEqual(
+            ["clippy:unwrap_used"],
+            findings_by_pattern["rust-unwrap-expect"]["linter_overlaps"],
+        )
         self.assertEqual("rust", findings_by_pattern["rust-unsafe"]["language"])
-        self.assertEqual("rust", findings_by_pattern["rust-todo-unimplemented"]["language"])
+        self.assertEqual(
+            "rust", findings_by_pattern["rust-todo-unimplemented"]["language"]
+        )
         self.assertEqual("rust", findings_by_pattern["rust-debug-output"]["language"])
         self.assertEqual("rust", findings_by_pattern["unbounded-loop"]["language"])
-        self.assertEqual("typescript", findings_by_pattern["typescript-explicit-any"]["language"])
-        self.assertEqual(["@typescript-eslint:no-explicit-any"], findings_by_pattern["typescript-explicit-any"]["linter_overlaps"])
-        self.assertEqual("typescript", findings_by_pattern["fetch-without-abort"]["language"])
+        self.assertEqual(
+            "typescript", findings_by_pattern["typescript-explicit-any"]["language"]
+        )
+        self.assertEqual(
+            ["@typescript-eslint:no-explicit-any"],
+            findings_by_pattern["typescript-explicit-any"]["linter_overlaps"],
+        )
+        self.assertEqual(
+            "typescript", findings_by_pattern["fetch-without-abort"]["language"]
+        )
         self.assertEqual("typescript", findings_by_pattern["empty-catch"]["language"])
-        self.assertEqual("sql", findings_by_pattern["sql-destructive-schema"]["language"])
-        self.assertEqual("sql", findings_by_pattern["sql-update-without-where"]["language"])
+        self.assertEqual(
+            "sql", findings_by_pattern["sql-destructive-schema"]["language"]
+        )
+        self.assertEqual(
+            "sql", findings_by_pattern["sql-update-without-where"]["language"]
+        )
         self.assertTrue(
-            any(finding["pattern_id"] == "fixed-sleep" and finding["language"] == "sql" for finding in scan["findings"])
+            any(
+                finding["pattern_id"] == "fixed-sleep" and finding["language"] == "sql"
+                for finding in scan["findings"]
+            )
         )
         self.assertIn("Languages scanned:", report)
         self.assertIn("rust:", report)
@@ -552,11 +616,14 @@ sleep 1
         self.assertTrue(has_finding("java-kotlin-broad-catch", "java"))
         self.assertTrue(has_finding("java-kotlin-broad-catch", "kotlin"))
         self.assertTrue(has_finding("ruby-bare-rescue", "ruby"))
-        self.assertIn("rubocop:Style/RescueStandardError", next(
-            finding["linter_overlaps"]
-            for finding in scan["findings"]
-            if finding["pattern_id"] == "ruby-bare-rescue"
-        ))
+        self.assertIn(
+            "rubocop:Style/RescueStandardError",
+            next(
+                finding["linter_overlaps"]
+                for finding in scan["findings"]
+                if finding["pattern_id"] == "ruby-bare-rescue"
+            ),
+        )
         self.assertIn("github-actions:", report)
         self.assertIn("terraform:", report)
 
@@ -587,8 +654,14 @@ ALTER TABLE users DROP COLUMN legacy_token;
 UPDATE users SET migrated = true;
 """,
             )
-            write_file(root, "docs/incidents/2026-01-billing.md", "Postmortem: repeated billing failure.\n")
-            write_file(root, "docs/runbooks/billing.md", "Runbook for billing incidents.\n")
+            write_file(
+                root,
+                "docs/incidents/2026-01-billing.md",
+                "Postmortem: repeated billing failure.\n",
+            )
+            write_file(
+                root, "docs/runbooks/billing.md", "Runbook for billing incidents.\n"
+            )
 
             scan = run_scan(root)
             report = run_scan_text(root)
@@ -623,11 +696,18 @@ UPDATE users SET migrated = true;
         self.assertIn("ruin_potential", exposure_summary["dimension_order"])
         irreversibility = exposure_summary["dimensions"]["irreversibility"]
         self.assertGreaterEqual(irreversibility["finding_count"], 4)
-        self.assertIn("What dry-run, rollback, restore, replay, or audit evidence", irreversibility["review_question"])
-        self.assertIn("data-change-missing-dry-run", {
-            item["pattern_id"] for item in irreversibility["top_patterns"]
-        })
-        self.assertIn("scripts/backfill_accounts.py", {item["path"] for item in irreversibility["top_paths"]})
+        self.assertIn(
+            "What dry-run, rollback, restore, replay, or audit evidence",
+            irreversibility["review_question"],
+        )
+        self.assertIn(
+            "data-change-missing-dry-run",
+            {item["pattern_id"] for item in irreversibility["top_patterns"]},
+        )
+        self.assertIn(
+            "scripts/backfill_accounts.py",
+            {item["path"] for item in irreversibility["top_paths"]},
+        )
         self.assertIn("Incident artifacts detected: 1", report)
         self.assertIn("Runbook files detected: 1", report)
         self.assertIn("## Exposure Review Leads", report)
@@ -662,20 +742,32 @@ jobs:
       - uses: actions/checkout@v4
 """,
             )
-            write_file(root, "README.md", "Rollback instructions live in the deploy runbook.\n")
+            write_file(
+                root, "README.md", "Rollback instructions live in the deploy runbook.\n"
+            )
 
             scan = run_scan(root)
             report = run_scan_text(root)
 
         candidates = scan["critical_flow_candidates"]
-        checkout = next(item for item in candidates if item["path"] == "app/routes/checkout.py")
-        deploy = next(item for item in candidates if item["path"] == ".github/workflows/deploy.yml")
+        checkout = next(
+            item for item in candidates if item["path"] == "app/routes/checkout.py"
+        )
+        deploy = next(
+            item
+            for item in candidates
+            if item["path"] == ".github/workflows/deploy.yml"
+        )
 
         self.assertEqual("request or job critical path", checkout["flow_type"])
-        self.assertEqual(["entrypoint", "state_mutation", "dependency"], checkout["anchor_kinds"][:3])
+        self.assertEqual(
+            ["entrypoint", "state_mutation", "dependency"], checkout["anchor_kinds"][:3]
+        )
         self.assertIn("feedback_delay", checkout["exposure_dimensions"])
         self.assertIn("python-http-without-timeout", checkout["supporting_patterns"])
-        self.assertIn("Trace from entrypoint to state mutation", checkout["trace_question"])
+        self.assertIn(
+            "Trace from entrypoint to state mutation", checkout["trace_question"]
+        )
         self.assertGreater(checkout["score"], deploy["score"])
 
         self.assertEqual("ci/release path", deploy["flow_type"])

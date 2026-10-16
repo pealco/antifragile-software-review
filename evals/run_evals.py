@@ -10,10 +10,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
-SCANNER = ROOT / "scripts" / "antifragile_scan.py"
-SCENARIOS = ROOT / "references" / "evaluation-scenarios.md"
+SKILL_DIR = ROOT / "skills" / "antifragile-software-review"
+SCANNER = SKILL_DIR / "scripts" / "antifragile_scan.py"
+SCENARIOS = SKILL_DIR / "references" / "evaluation-scenarios.md"
 FIXTURES = ROOT / "evals" / "fixtures"
 GOLDEN = ROOT / "evals" / "golden"
 
@@ -92,9 +92,9 @@ def fail(message: str) -> None:
 
 def parse_scenario_titles() -> set[str]:
     text = SCENARIOS.read_text(encoding="utf-8")
-    for block in re.findall(r"```json\n(.*?)\n```", text, re.S):
+    for block in re.findall(r"```json\n(.*?)\n```", text, re.DOTALL):
         json.loads(block)
-    return set(re.findall(r"^## Scenario \d+: (.+)$", text, re.M))
+    return set(re.findall(r"^## Scenario \d+: (.+)$", text, re.MULTILINE))
 
 
 def run_scan(fixture: Path) -> dict[str, object]:
@@ -125,7 +125,9 @@ def validate_fixture_case(case: dict[str, object], scenario_titles: set[str]) ->
 
     max_findings = case.get("max_findings")
     if max_findings is not None and len(scan["findings"]) > int(max_findings):
-        fail(f"{title}: expected at most {max_findings} findings, got {len(scan['findings'])}")
+        fail(
+            f"{title}: expected at most {max_findings} findings, got {len(scan['findings'])}"
+        )
 
     signals = scan["project_signals"]
     for key in ("incident_file_count", "runbook_file_count"):
@@ -150,9 +152,15 @@ def validate_golden_output(case: dict[str, object]) -> None:
         fail(f"golden review output missing: {golden}")
     text = golden.read_text(encoding="utf-8")
     validate_review_text(text, str(golden))
-    missing = [marker for marker in case.get("required_review_text", ()) if str(marker) not in text]
+    missing = [
+        marker
+        for marker in case.get("required_review_text", ())
+        if str(marker) not in text
+    ]
     if missing:
-        fail(f"{case['title']}: golden review missing expected text: {', '.join(missing)}")
+        fail(
+            f"{case['title']}: golden review missing expected text: {', '.join(missing)}"
+        )
 
 
 def main() -> int:

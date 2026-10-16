@@ -19,6 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+SKILL_DIR = ROOT / "skills" / "antifragile-software-review"
 QUERIES = ROOT / "evals" / "trigger_queries.json"
 THRESHOLD = (
     0.5  # agentskills.io default: trigger rate above this passes a should-trigger query
@@ -145,7 +146,9 @@ def run_once(
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--skill-dir", type=Path, default=ROOT, help="skill under test")
+    ap.add_argument(
+        "--skill-dir", type=Path, default=SKILL_DIR, help="skill under test"
+    )
     ap.add_argument("--queries", type=Path, default=QUERIES)
     ap.add_argument(
         "--split", choices=("train", "validation", "holdout", "all"), default="all"
